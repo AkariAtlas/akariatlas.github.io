@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){if(location.hash!=='#receive'||!window.opener)return;const OLD='https://naekitakadoportfolio.github.io';
+addEventListener('message',async e=>{if(e.origin!==OLD||!e.data||!e.data.mmMove)return;const d=e.data;
+ try{Object.entries(d.ls||{}).forEach(([k,v])=>{if(localStorage.getItem(k)===null)localStorage.setItem(k,v)});}catch(x){}
+ for(const s of d.idb||[]){try{await new Promise((res,rej)=>{const r=indexedDB.open(s.db,s.ver||1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(s.store))r.result.createObjectStore(s.store,{keyPath:s.keyPath})};
+   r.onerror=rej;r.onsuccess=()=>{const db=r.result,tx=db.transaction(s.store,'readwrite');s.records.forEach(x=>tx.objectStore(s.store).put(x));tx.oncomplete=()=>{db.close();res()};tx.onerror=rej;};});}catch(x){}}
+ try{e.source.postMessage({mmMoved:1},OLD)}catch(x){}
+ location.replace(location.pathname);location.reload();});})();</script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="preconnect" href="https://unpkg.com"><link rel="dns-prefetch" href="https://photon.komoot.io"><link rel="dns-prefetch" href="https://api.open-meteo.com">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Akari Atlas">
+<meta name="theme-color" content="#28546B">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Akari Atlas</title><meta name="description" content="Akari Atlas · Your world, one journey at a time."><link rel="icon" href="icon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--sky1:#91CBE0;--sky2:#F7F2E8;--bg3:#F7F2E8;--txt:#343B3B;--mut:#6b706c;--card:#fffdf8e6;--inbg:#fff;--leaf:#28546B;--leaf2:#28546B;--moss:#9CAF88;--sun:#c9962f;--gold:#E7BD68;--rose:#E98B73;--line:#e9e2d3;--warn:#fbefd9;--tag:#f6e3bd;--tagt:#6b4a12;--nav:#F7F2E8f0;--ocean:#28546B}
+body.dark{--sky1:#13283a;--sky2:#1b2731;--bg3:#151f27;--txt:#F7F2E8;--mut:#b5b9b2;--card:#1f2d38e6;--inbg:#26384a;--leaf:#91CBE0;--leaf2:#91CBE0;--moss:#7f9470;--sun:#E7BD68;--gold:#E7BD68;--rose:#E98B73;--line:#334656;--warn:#3a3122;--tag:#4a3b1d;--tagt:#f5d58a;--nav:#16222cf0;--ocean:#91CBE0}
+*{box-sizing:border-box}
+body{margin:0;font-family:Quicksand,sans-serif;color:var(--txt);background:linear-gradient(180deg,var(--sky1),var(--sky2) 50%,var(--bg3));background-attachment:fixed;min-height:100vh;padding:env(safe-area-inset-top) 0 calc(86px + env(safe-area-inset-bottom))}
+h1,h2,h3{font-family:'Kaisei Decol',serif;margin:.2em 0}
+h2{font-size:19px}h3{font-size:16px}
+a{color:var(--leaf2)}h1,h2,h3{color:var(--ocean)}.hero h1{color:#fff}
+.satchel{animation:bob 3s ease-in-out infinite}@keyframes bob{50%{transform:translateY(-4px) rotate(-4deg)}}
+#flyer{animation:fly 26s linear infinite}@keyframes fly{0%{transform:translate(-40px,30px)}50%{transform:translate(200px,16px)}100%{transform:translate(460px,26px)}}
+.empty{text-align:center;padding:18px 8px;color:var(--mut)}.empty svg{width:70px;height:56px;display:block;margin:0 auto 6px}
+.day{border-left:2px dashed var(--moss)!important;border-radius:0}
+.brand{display:flex;align-items:center;gap:6px;font:700 11px Quicksand;letter-spacing:.3px;opacity:.95}
+.scene{position:relative;height:160px;overflow:hidden}
+.scene>svg{position:absolute;inset:0;width:100%;height:100%}
+.cloud{animation:drift 45s linear infinite}.cloud.b{animation-duration:70s}
+@keyframes drift{from{transform:translateX(-30%)}to{transform:translateX(110%)}}
+.fall{position:absolute;top:-20px;font-size:14px;animation:fall 10s linear infinite;opacity:.85}
+@keyframes fall{to{transform:translateY(190px) rotate(300deg)}}
+.hero{position:absolute;left:16px;bottom:14px;color:#fff;text-shadow:0 2px 6px #2d4d3a99}
+.hero h1{font-size:25px}
+.topbtns{position:absolute;right:12px;top:10px;display:flex;gap:6px}
+.topbtns button{border:none;border-radius:99px;padding:6px 11px;background:#ffffffb0;font:700 12px Quicksand;color:#2f5e40;cursor:pointer}
+.wrap{max-width:760px;margin:0 auto;padding:10px 12px}
+.card{background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 6px 18px #2d4d3a1a;border:1px solid #ffffff33}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sp{justify-content:space-between}
+#nearCats{display:flex;flex-wrap:wrap;gap:8px;overflow:visible!important}#nearCats .pill{flex:0 0 auto;white-space:nowrap}
+.pill{white-space:nowrap;flex-shrink:0;border:none;border-radius:999px;padding:7px 13px;background:var(--inbg);color:var(--leaf2);font:700 13px Quicksand;box-shadow:0 1px 4px #0001;cursor:pointer}
+body.dark .pill.on,body.dark .act{color:#13283a}.pill.on{background:var(--leaf);color:#fff}
+.act{background:var(--leaf);color:#fff;border:none;border-radius:12px;padding:9px 14px;font:700 14px Quicksand;cursor:pointer}
+.muted{color:var(--mut);font-size:13px}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--inbg);color:var(--txt);width:100%}
+table{width:100%;border-collapse:collapse}td{padding:6px 3px;border-bottom:1px dashed var(--line);vertical-align:middle}
+.bar{height:12px;background:var(--line);border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--moss),var(--leaf))}.bar.over>i{background:linear-gradient(90deg,var(--sun),var(--rose))}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:var(--nav);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:8px 2px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line);z-index:9}
+nav button{background:none;border:none;font:700 11px Quicksand;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;flex:1}
+nav button span{font-size:22px}nav button.on{color:var(--leaf2)}
+.view{display:none}.view.on{display:block;animation:fade .35s}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line)}
+.chk>input[type=checkbox]{width:22px;height:22px;accent-color:var(--leaf);flex:none;margin-top:1px}
+.chk.done label{text-decoration:line-through;opacity:.6}
+.place{display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.ic{font-size:26px;width:44px;height:44px;border-radius:14px;background:var(--line);display:grid;place-items:center;flex:none}
+a.map{display:inline-block;margin:6px 6px 0 0;font-size:13px;font-weight:700;color:#fff;background:var(--leaf);padding:5px 11px;border-radius:99px;text-decoration:none}
+a.map.alt{background:#6f9ab8}
+.day{border-left:4px solid var(--moss);padding-left:12px;margin:12px 0}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--tag);color:var(--tagt);margin-left:4px}
+.cost{font-weight:700;color:var(--sun);font-size:14px}
+.warn{background:var(--warn);border-left:4px solid var(--sun);padding:10px 12px;border-radius:12px;font-size:14px;margin:8px 0}
+details{background:var(--inbg);border-radius:14px;padding:10px 12px;margin:8px 0}summary{font-weight:700;cursor:pointer}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--inbg);border-radius:16px;padding:12px;text-align:center}.stat b{display:block;font-size:19px;color:var(--leaf2)}
+.seg{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.seg::-webkit-scrollbar{display:none}
+.sync{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:#ffffffb0;color:#2f5e40}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#2f5e40;color:#fff;padding:9px 16px;border-radius:99px;font-weight:700;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:20}
+.toast.on{opacity:1}
+
+.night{}
+.wxfx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.wxfx i{position:absolute;top:-20px;width:2px;height:16px;background:linear-gradient(transparent,#dff1ff);animation:drop linear infinite;opacity:.8}
+.wxfx.storm{animation:flash 6s infinite}.wxfx.snow i{width:6px;height:6px;border-radius:50%;background:#fff}
+.wxfx.fog{background:linear-gradient(90deg,#ffffff00,#ffffff88,#ffffff00);animation:fogm 12s ease-in-out infinite alternate}
+.wxfx.sun::after{content:'';position:absolute;right:28px;top:14px;width:70px;height:70px;border-radius:50%;box-shadow:0 0 40px 18px #fff3c4aa;animation:pulse 4s ease-in-out infinite}
+@keyframes drop{to{transform:translateY(200px)}}@keyframes flash{0%,93%,100%{background:transparent}94%,96%{background:#ffffff66}}
+@keyframes fogm{from{transform:translateX(-30%)}to{transform:translateX(30%)}}@keyframes pulse{50%{transform:scale(1.15)}}
+.wxbox{position:absolute;right:12px;bottom:12px;text-align:right;color:#fff;text-shadow:0 1px 4px #0008;font-size:13px;max-width:55%}
+.acList{position:relative}.acItem{display:block;width:100%;text-align:left;border:none;background:var(--inbg);color:var(--txt);padding:10px 12px;border-bottom:1px solid var(--line);font:inherit;cursor:pointer}
+#map{height:300px;border-radius:18px;margin:10px 0;z-index:1}
+.leaflet-container{font-family:Quicksand,sans-serif}
+body.dark .skyrect,body.night .skyrect{fill:#1b2d45}body.dark .skyrect2,body.night .skyrect2{fill:#24405a}
+#sheet{position:fixed;inset:0;z-index:30;background:#0007;display:none;align-items:flex-end}#sheet.on{display:flex}
+.sheetIn{background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);width:100%;max-width:760px;margin:0 auto;max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));background-color:var(--inbg)}
+#navBar{position:fixed;left:8px;right:8px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:25;display:none}#navBar.on{display:block}.navIn{background:var(--inbg);border-radius:18px;padding:12px 14px;box-shadow:0 8px 24px #0004;border:2px solid #3b82f6;max-width:740px;margin:0 auto}
+</style>
+</head>
+<body><script src="splash.js?v=2611130642"></script><script src="errlog.js?v=2611130642"></script>
+<div class="scene" style="position:sticky;top:0;z-index:5">
+<svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMid slice"><rect width="400" height="160" fill="#91CBE0" class="skyrect"/><rect y="60" width="400" height="100" fill="#cfe7ef" opacity=".55" class="skyrect2"/>
+<circle id="sunmoon" cx="335" cy="38" r="17" fill="#E7BD68"/>
+<g class="cloud"><ellipse cx="60" cy="35" rx="36" ry="11" fill="#F7F2E8" opacity=".9"/><ellipse cx="82" cy="28" rx="20" ry="11" fill="#F7F2E8" opacity=".9"/></g>
+<g class="cloud b"><ellipse cx="190" cy="56" rx="28" ry="8" fill="#F7F2E8" opacity=".75"/><ellipse cx="205" cy="50" rx="15" ry="8" fill="#F7F2E8" opacity=".75"/></g>
+<path d="M0 112 Q70 82 150 104 T300 94 T400 100 V160 H0Z" fill="#9CAF88"/>
+<path d="M0 124 Q60 112 120 122 T240 118 T400 122 V160 H0Z" fill="#28546B" opacity=".9"/>
+<path d="M0 132 Q100 124 200 134 T400 130" stroke="#F7F2E8" stroke-width="1.2" opacity=".5" fill="none"/>
+<g><rect x="262" y="88" width="12" height="16" fill="#F7F2E8"/><path d="M260 88 l8 -8 8 8z" fill="#E98B73"/><rect x="278" y="82" width="14" height="22" fill="#F7F2E8"/><path d="M276 82 l9 -9 9 9z" fill="#E98B73"/><rect x="296" y="90" width="11" height="14" fill="#F7F2E8"/><path d="M294 90 l7.5 -7 7.5 7z" fill="#E98B73"/><rect x="314" y="78" width="6" height="26" fill="#F7F2E8"/><circle cx="317" cy="76" r="3" fill="#E7BD68"/></g>
+<g fill="#7f9470"><circle cx="44" cy="106" r="9"/><circle cx="56" cy="101" r="11"/><circle cx="356" cy="100" r="10"/></g>
+<path d="M-40 70 Q100 40 220 50 T470 56" stroke="#F7F2E8" stroke-width="1.2" stroke-dasharray="3 5" fill="none" opacity=".8"/>
+<g id="flyer"><g transform="scale(.42)"><g class="satchel"><path d="M-14 -6 q-14 -10 -20 0 q8 2 14 6z" fill="#F7F2E8" opacity=".95"/><path d="M14 -6 q14 -10 20 0 q-8 2 -14 6z" fill="#F7F2E8" opacity=".95"/><path d="M-8 -12 q8 -9 16 0" stroke="#7a2e22" stroke-width="2.4" fill="none"/><rect x="-14" y="-10" width="28" height="22" rx="6" fill="#D9573F"/><path d="M-14 -4 q14 10 28 0 v-2 q-14 -6 -28 0z" fill="#E98B73"/><rect x="-3" y="-2" width="6" height="6" rx="1.5" fill="#E7BD68"/></g></g></g>
+</svg>
+<div class="wxfx" id="wxfx"></div>
+<div class="topbtns"><span class="sync" id="sync">💾 This phone</span><button onclick="weather(null,true)" title="Announce weather">🔊</button><button onclick="toggleTheme()" id="themeBtn">🌙</button></div>
+<div class="hero"><div class="brand"><svg viewBox="-36 -24 72 40" width="26" height="15"><g class="satchel"><path d="M-14 -6 q-14 -10 -20 0 q8 2 14 6z" fill="#F7F2E8" opacity=".95"/><path d="M14 -6 q14 -10 20 0 q-8 2 -14 6z" fill="#F7F2E8" opacity=".95"/><path d="M-8 -12 q8 -9 16 0" stroke="#7a2e22" stroke-width="2.4" fill="none"/><rect x="-14" y="-10" width="28" height="22" rx="6" fill="#D9573F"/><path d="M-14 -4 q14 10 28 0 v-2 q-14 -6 -28 0z" fill="#E98B73"/><rect x="-3" y="-2" width="6" height="6" rx="1.5" fill="#E7BD68"/></g></svg>AKARI ATLAS</div><h1>Akari Atlas</h1><div id="countdown" style="font-weight:700"></div><div style="font-size:11px">💱 <span id="rateBadge"></span></div></div>
+<div class="wxbox" id="wx">Loading live weather…</div>
+</div>
+<div class="wrap">
+
+<section class="view on" id="v-today">
+<div class="card"><h2>🌦️ Weather · next 3 days</h2><div class="grid2" style="grid-template-columns:repeat(3,1fr)" id="wxDays"></div><p class="muted">Live from Open-Meteo. It follows the place you search or pin, and refreshes every 15 min. Tap 🔊 to hear it.</p></div>
+<div class="card" id="todayCard"></div>
+<div class="card"><h2>🍃 Trip at a glance</h2><div class="grid2" id="tripStats"></div><div id="tripTip"></div></div>
+<div class="card"><h2>🆘 Emergency</h2><p>Police <b>110</b> · Ambulance/fire <b>119</b> · Tourist hotline (24h, English) <b>0800-011-765</b></p><p class="muted" id="taxiAddr"></p></div>
+</section>
+
+<section class="view" id="v-explore">
+<div class="card">
+<h2>🔍 Search anywhere in the world</h2>
+<div class="row"><input id="q" autocomplete="off" placeholder="Try “cafe near me”, a city or a landmark…" style="flex:1" oninput="onType()" onkeydown="if(event.key==='Enter'){clearTimeout(acTimer);autocomplete(this.value.trim())}"><button class="pill" onclick="locate()">📍 Near me</button></div>
+<div class="acList" id="ac"></div>
+<div id="placeHead"><p class="muted">Live suggestions as you type. Pick one, or tap the map, to see weather, live nearby places and transit. Offline: map areas you have already viewed, your plans, budget and checklists still work.</p></div>
+<div class="row" style="margin-top:8px"><button class="pill" id="gmapBtn" onclick="toggleGmap()">🗺️ Google map (English)</button></div><div id="map"></div><iframe id="gmap" style="display:none;width:100%;height:340px;border:0;border-radius:18px;margin:10px 0" loading="lazy"></iframe>
+<div class="seg" id="nearCats"></div>
+<div id="near"></div>
+</div>
+<div class="card"><h2>🚉 Live transit here</h2><div id="transit"><p class="muted">Pick a place first.</p></div></div>
+</section>
+
+<section class="view" id="v-plan">
+<div class="card"><h2>📌 Day route</h2><div class="seg" id="daySeg"></div><div id="dayIdea"></div><div id="route"></div></div>
+<div class="card"><h2>🌿 Nature + café + hobby days</h2><div id="combos"></div></div>
+</section>
+
+<section class="view" id="v-money">
+<div class="card"><h2>💰 Budget for two</h2>
+<div class="row"><label style="flex:1" class="muted">Total ₱<input type="number" id="total"></label><label style="flex:1" class="muted"><span id="rateLbl">Rate</span><input type="number" step="0.001" id="rate"></label></div>
+<table id="btab"></table><div style="margin-top:10px" class="bar" id="bbar"><i></i></div><p id="bsum" style="font-weight:700"></p></div>
+<div class="card"><h2>🧾 Spending log</h2>
+<div class="row"><input id="eName" placeholder="What" style="flex:2"><input id="eShop" placeholder="Shop" style="flex:1"><input id="eAmt" type="number" placeholder="NT$" style="flex:1"></div>
+<div class="row" style="margin-top:6px"><select id="eCat" style="flex:2"></select><select id="eWho" style="flex:1"><option>Me</option></select><button class="act" onclick="addExp()">Add</button></div>
+<div id="eList" style="margin-top:8px"></div></div>
+<div class="card twOnly"><h2>🧾 Tax refund tracker</h2><p class="muted">At about NT$2,000+ in one shop on the same day, at shops showing a "TRS / Tax Refund" sign, ask for the refund form. Bring your passport.</p><div id="trs"></div></div>
+<div class="card"><h2>🎮 Gundam & TCG price checker</h2><div class="row"><input id="pcItem" placeholder="Item" style="flex:2"><input id="pcShop" placeholder="Shop" style="flex:1"><input id="pcPrice" type="number" placeholder="NT$" style="flex:1"><button class="act" onclick="addPrice()">+</button></div><div id="pc" style="margin-top:8px"></div></div>
+<div class="card"><h2>🎁 Christmas gift planner</h2><div id="gifts"></div><div class="row" style="margin-top:8px"><input id="gName" placeholder="Name" style="flex:2"><input id="gBud" type="number" placeholder="NT$" style="flex:1"><button class="act" onclick="addGift()">+</button></div></div>
+<div class="card"><h2>🌱 Savings</h2><div class="row"><input type="number" id="saveAmt" placeholder="₱" style="flex:1"><button class="act" onclick="addSave()">Add</button></div><div style="margin:10px 0" class="bar" id="saveBar"><i></i></div><div id="saveTxt" class="muted"></div></div>
+<div class="card"><h2>💱 Currencies & converter</h2><div id="curPick"></div>
+<div class="row" style="margin-top:10px"><input id="cvAmt" type="number" value="100" style="flex:1" oninput="convert()"><select id="cvFrom" style="flex:1" onchange="convert()"></select><button class="pill" onclick="swapCv()" aria-label="Swap">⇄</button><select id="cvTo" style="flex:1" onchange="convert()"></select></div>
+<div id="cvOut" style="margin-top:8px"></div><p class="muted">Live rates, refreshed hourly, and the last rates are kept for offline use.</p></div>
+</section>
+
+<section class="view" id="v-docs">
+<div class="card"><h2>⚙️ Sync & settings</h2>
+<label class="muted" style="display:none">Apps Script backend URL (one-time)<input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec" onchange="CFG.API=this.value.trim();localStorage.setItem('tw_api',CFG.API)"></label>
+<div id="gdInfo" style="margin:8px 0"></div><details><summary class="muted">Or use shared sync (invite link)</summary><div id="tripInfo" style="margin-top:8px"></div></details>
+<button class="act" style="margin-top:8px" onclick="openWizard()">✈️ Trip settings (dates, stay, travellers)</button><label class="muted" style="display:block;margin-top:8px">Voice (US English)<div class="row"><select id="voicePick" style="flex:1" onchange="D.voiceName=this.value;save()"></select><button class="pill" onclick="speak('Hi! I\'m your Taiwan travel buddy. Ready when you are.')">▶️ Test</button></div></label><p class="muted">For the most natural voice on iPhone: Settings → Accessibility → Spoken Content → Voices → English (US) → download <b>Ava (Premium)</b> or <b>Samantha (Enhanced)</b>.</p><label class="chk"><input type="checkbox" id="voiceOn" onchange="D.voice=this.checked;save()"> Talk to me: announce weather, pins and spending aloud</label></div>
+<div class="card"><h2>🎫 My bookings (private)</h2><p class="muted">Saved only on your phone and in your own Google Sheet, never in the public code.</p><div id="book"></div></div>
+<div class="card"><h2>🧳 My trips</h2><p class="muted">Every trip you plan is kept here, with its spending and stops, so you can look back anytime.</p><div id="tripsList"></div><button class="act" style="margin-top:8px" onclick="newTrip()">＋ Plan a new trip</button></div>
+<div class="card twOnly"><h2>📋 Checklist</h2><div class="warn">Taiwan is visa-free for Philippine passports Aug 1, 2026 – Jul 31, 2027, up to 14 days.</div><div id="docs"></div></div>
+<div class="card twOnly"><h2>🔗 Official links</h2><div id="links"></div></div>
+<div class="card"><h2>🧳 Packing</h2><div class="seg" id="packSeg"></div><div id="pack"></div><div class="row" style="margin-top:8px"><input id="packNew" placeholder="Add item" style="flex:1"><button class="act" onclick="addPack()">+</button></div></div>
+<p class="muted" style="text-align:center"><a href="privacy.html" target="_blank">Privacy & terms</a></p><div class="card twOnly"><h2>🗣️ Mandarin phrases</h2><div id="phr"></div></div>
+</section>
+</div>
+<nav>
+<button class="on" data-v="today"><span>🏡</span>Today</button>
+<button data-v="explore"><span>🔍</span>Explore</button>
+<button data-v="plan"><span>🗺️</span>Plan</button>
+<button data-v="money"><span>💰</span>Money</button>
+<button data-v="docs"><span>📋</span>Docs</button>
+</nav>
+<div class="toast" id="toast"></div><div id="sheet"></div><div id="navBar"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="akari.js?v=2611130642"></script>
+
+
+</body></html>
