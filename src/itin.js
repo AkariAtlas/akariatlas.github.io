@@ -112,3 +112,30 @@ function itApply(mode) { D.stopx = D.stopx || {}; D.manualStops = 1;
   save(); closeSheet(); try { curDay = +Object.keys(IT.plan)[0] || 0; renderPlan() } catch (e) { } toast('Itinerary added ✓') }
 on('plan:render', () => { const bar = $('daySeg'); if (!bar || document.getElementById('itBtn')) return;
   bar.insertAdjacentHTML('beforebegin', `<button id="itBtn" class="pill" style="margin:0 0 8px" onclick="openItinImport()">📥 Import itinerary (photo, PDF, Word, CSV, text)</button>`) });
+/* ---------- edit / move / delete with auto-adjusted times ----------
+   Notes, tickets and times now travel with their stop (they used to stay on the old row number).
+   Times you type yourself are locked 🔒; the others re-flow from the day's first stop using travel time and visit length. */
+function dayX(d) { return (D.routes[d] || []).map((_, k) => (D.stopx || {})[d + ':' + k] || {}) }
+function setDayX(d, ex) { D.stopx = D.stopx || {}; Object.keys(D.stopx).filter(k => k.startsWith(d + ':')).forEach(k => delete D.stopx[k]); ex.forEach((e, k) => { if (e && Object.keys(e).length) D.stopx[d + ':' + k] = e }) }
+function autoTimeOn() { return localStorage.getItem('ak_autotime') !== '0' }
+function retimeDay(d) { const r = D.routes[d] || [], ex = dayX(d); if (!r.length) return;
+  let t = itMin(ex[0].time) ?? (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570), prev = null;
+  r.forEach((x, k) => { const s = { name: x[0], lat: x[1], lon: x[2] }, kd = itKind(s); if (prev && x[1] != null && prev.lat != null) t += itTravel(prev, s);
+    if (ex[k].lock && itMin(ex[k].time) != null) t = itMin(ex[k].time); else if (/check-?out|departure|airport/i.test(x[0]) && ex[k].time) t = Math.max(t, itMin(ex[k].time) || t);
+    else { if (kd === 'night' && t < 1020) t = 1020; ex[k] = { ...ex[k], time: itHm(Math.round(t / 15) * 15) } }
+    t += /check|airport|departure|arrival/i.test(x[0]) ? 30 : IDUR[kd]; prev = s });
+  setDayX(d, ex) }
+function afterEdit(msg, undo) { if (autoTimeOn()) retimeDay(curDay); save(); renderPlan(); if (undo) { window._undo = undo; const x = $('toast'); x.innerHTML = `${esc(msg)} · <button class="pill" style="min-height:28px;padding:2px 10px" onclick="_undo&&_undo();_undo=null;this.closest('#toast').classList.remove('on')">Undo</button>`; x.classList.add('on'); clearTimeout(window._ut); window._ut = setTimeout(() => x.classList.remove('on'), 5000) } else if (msg) toast(msg) }
+mv = function (i, dir) { const r = D.routes[curDay], j = i + dir; if (j < 0 || j >= r.length) return; const ex = dayX(curDay), snap = JSON.stringify([r, ex]);
+  [r[i], r[j]] = [r[j], r[i]]; [ex[i], ex[j]] = [ex[j], ex[i]]; if (ex[i]) delete ex[i].lock; if (ex[j]) delete ex[j].lock; setDayX(curDay, ex); D.manualStops = 1;
+  afterEdit(autoTimeOn() ? 'Moved · times adjusted' : 'Moved', () => { const [a, b] = JSON.parse(snap); D.routes[curDay] = a; setDayX(curDay, b); save(); renderPlan() }) };
+rm = function (i) { const r = D.routes[curDay], ex = dayX(curDay), snap = JSON.stringify([r, ex]), nm = r[i] && r[i][0];
+  r.splice(i, 1); ex.splice(i, 1); setDayX(curDay, ex); D.manualStops = 1;
+  afterEdit(`Removed ${nm || 'stop'}${autoTimeOn() ? ' · times adjusted' : ''}`, () => { const [a, b] = JSON.parse(snap); D.routes[curDay] = a; setDayX(curDay, b); save(); renderPlan() }) };
+saveStop = function (i) { D.manualStops = 1; const x = D.routes[curDay][i], k = curDay + ':' + i, old = (D.stopx || {})[k] || {}; x[0] = $('esN').value || x[0]; x[3] = $('esC').value; D.stopx = D.stopx || {};
+  const tm = $('esT').value, lock = tm ? (tm !== old.time ? true : !!old.lock) : false;
+  D.stopx[k] = { time: tm, ref: $('esR').value, note: $('esNo').value, ...(lock ? { lock: true } : {}) }; closeSheet(); afterEdit(lock && tm !== old.time ? 'Saved · 🔒 time kept, rest of day adjusted' : 'Saved ✓') };
+(function () { if (typeof addStopManual === 'function') { const a0 = addStopManual; addStopManual = async function () { const r = await a0.apply(this, arguments); if (autoTimeOn()) { retimeDay(curDay); save(); renderPlan() } return r } } })();
+on('plan:render', () => { const seg = $('daySeg'); if (!seg) return;
+  document.querySelectorAll('#v-plan .tag').forEach(t => { const m = /🕒\s*(\d{1,2}:\d{2})/.exec(t.textContent); if (!m) return; const row = t.closest('.row'), btn = row && row.querySelector('[onclick^="editStop("]'); if (!btn) return; const i = +/editStop\((\d+)\)/.exec(btn.getAttribute('onclick'))[1]; if ((D.stopx || {})[curDay + ':' + i]?.lock && !t.dataset.l) { t.dataset.l = 1; t.textContent = '🔒 ' + m[1] } });
+  if (document.getElementById('atBar')) return; seg.insertAdjacentHTML('afterend', `<div id="atBar" class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><label style="display:inline-flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" style="width:18px;height:18px" ${autoTimeOn() ? 'checked' : ''} onchange="localStorage.setItem('ak_autotime',this.checked?'1':'0');if(this.checked){retimeDay(curDay);save();renderPlan()}"> ⏱ Auto-adjust times</label><button class="pill" style="min-height:32px" onclick="retimeDay(curDay);save();renderPlan();toast('Times re-planned ✓')">Re-plan this day's times</button><span class="muted" style="font-size:12px">🔒 = a time you set</span></div>`) });
