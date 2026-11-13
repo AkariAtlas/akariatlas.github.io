@@ -118,7 +118,13 @@ const NEAR = {
   stations: ['🚉 Stations & bus terminals', 'nwr["railway"="station"];nwr["amenity"="bus_station"]'],
 };
 let nearCtl = null;
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS_MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass.race/api/interpreter'];
+/* ask every Overpass mirror at once and use the first good answer (was: one after another, up to ~27 s when a mirror was slow) */
+(function () { const f0 = window.fetch; window.fetch = function (u, o) { if (u !== OVERPASS[0]) return f0.apply(this, arguments);
+  const ctls = OVERPASS_MIRRORS.map(() => new AbortController()), outer = o && o.signal; if (outer) outer.addEventListener('abort', () => ctls.forEach(c => c.abort()));
+  return Promise.any(OVERPASS_MIRRORS.map((m, i) => f0(m, Object.assign({}, o, { signal: ctls[i].signal })).then(r => { if (!r.ok) throw new Error(r.status); return r })))
+    .then(r => { ctls.forEach((c, i) => { if (OVERPASS_MIRRORS[i] !== r.url) c.abort() }); return r }) } })();
 const PHOTON_Q = { cafe: [['cafe', 'amenity:cafe'], ['coffee', 'amenity:cafe'], ['tea', 'amenity:cafe']], food: [['restaurant', 'amenity:restaurant'], ['noodle', 'amenity:restaurant'], ['food', 'amenity:fast_food']], hobby: [['toys', 'shop:toys'], ['games', 'shop:games'], ['anime', 'shop'], ['hobby', 'shop'], ['card', 'shop']], gifts: [['gift', 'shop:gift'], ['souvenir', 'shop'], ['stationery', 'shop:stationery'], ['daiso', 'shop']], clothes: [['clothes', 'shop:clothes'], ['uniqlo', 'shop']], nature: [['park', 'leisure:park'], ['viewpoint', 'tourism:viewpoint'], ['temple', 'amenity:place_of_worship'], ['trail', 'highway']], market: [['night market', ''], ['market', 'amenity:marketplace']], bike: [['youbike', ''], ['bicycle', 'amenity:bicycle_rental'], ['rental', 'shop']], stations: [['station', 'railway:station'], ['bus station', 'amenity:bus_station'], ['MRT', 'railway']] };
 async function photonNear(p, radius) { const d = radius / 111000 * 1.4, bb = [p.lon - d, p.lat - d, p.lon + d, p.lat + d].join(','); const seen = new Set(), out = [];
   await Promise.all((PHOTON_Q[nearCat] || []).map(async ([q, tag]) => { try { const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&bbox=${bb}${tag ? '&osm_tag=' + tag : ''}&limit=20&lang=en`)).json(); j.features.forEach(f => { const k = f.properties.osm_id; if (seen.has(k)) return; seen.add(k); const [lo, la] = f.geometry.coordinates; out.push({ lat: la, lon: lo, tags: { name: f.properties.name } }) }) } catch (e) { } }));
