@@ -84,9 +84,9 @@ const iso = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 function b64u(s) { try { return decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/')))) } catch (e) { return '' } }
 function msgText(p) { let out = ''; (function walk(x) { if (!x) return; if (x.mimeType === 'text/plain' && x.body?.data) out += b64u(x.body.data) + '\n'; else if (x.mimeType === 'text/html' && x.body?.data && !out) out += b64u(x.body.data).replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&') + '\n'; (x.parts || []).forEach(walk) })(p); return out.replace(/\n{2,}/g, '\n') }
 function parseFlights(t) { t = t.replace(/[\u202a\u202c]/g, ''); const out = [];
-  // Trip.com style: 'Departure: Manila - Taipei | December 12, 2026' ... '3:40 AM' ... 'EVA Air BR262'
+  // Trip.com style: 'Departure: City A - City B | Month D, YYYY' ... 'H:MM AM' ... 'Airline XX123'
   { const rt = /(Departure|Return|Outbound|Inbound)[:：]\s*([^|\n]{3,60}?)\s*\|?\s*([A-Za-z]+ \d{1,2},? \d{4})([\s\S]{0,700}?)\b([A-Z]{2}|[A-Z]\d|\d[A-Z])\s?(\d{2,4})\b/g; let k; while ((k = rt.exec(t))) { const tm = (k[4].match(/(\d{1,2}:\d{2}\s*[AP]M)/) || [])[1] || ''; out.push({ no: k[5] + k[6], time: tm, date: pDate(k[3]), from: k[2].replace(/\|/g, '').trim() }) } }
-  // Links with flightNo=BR262 ... takeoffDatetime=2026-12-12 03:40
+  // Links with flightNo=XX123 ... takeoffDatetime=YYYY-MM-DD HH:MM
   { const rl = /flightNo=([A-Z0-9]{2})(\d{2,4})[^\s"]*?takeoffDatetime=(\d{4}-\d{2}-\d{2})[ T+%20]*(\d{2}:\d{2})?/g; let k; while ((k = rl.exec(t))) if (!out.some(f => f.no === k[1] + k[2])) out.push({ no: k[1] + k[2], time: k[4] || '', date: pDate(k[3]), from: '' }) }
   if (out.length) return out.filter(f => f.date); const re = /([A-Z][A-Za-z ]{2,30}?)\s*[·|-]?\s*\b([A-Z0-9]{2})\s?(\d{2,4})\b[\s\S]{0,200}?Departure[:：]?\s*([0-9:]{4,5}\s*[AP]M)?,?\s*([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2} [A-Za-z]+ \d{4})[,\s]*([^\n]{0,60})/g; let m;
   while ((m = re.exec(t))) out.push({ no: m[2] + m[3], time: (m[4] || '').trim(), date: pDate(m[5]), from: m[6].replace(/[|│]+/g, '').trim() });

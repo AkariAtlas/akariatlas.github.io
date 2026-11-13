@@ -23,7 +23,7 @@ Static PWA (GitHub Pages) + optional free Google Apps Script backend.
 2. Paste `Code.gs` → Save.
 3. **Deploy → New deployment → Web app**. Execute as: **Me**. Who has access: **Anyone**. Deploy, authorize, then copy the `/exec` URL.
 4. In the app: **Docs → Sync & settings** → paste the URL → **Create trip**.
-5. Tap **Copy invite link** and send it to your husband. He opens it once on his phone.
+5. Tap **Copy invite link** and send it to your travel companion. They open it once on their phone.
 
 Your data lives in the `trips` tab of your Sheet. Nothing is deleted unless you delete the row.
 

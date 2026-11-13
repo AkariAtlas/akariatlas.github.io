@@ -26,6 +26,6 @@ function set(id,s){S[id]={...(S[id]||{}),s};sv();draw()}function sv(){localStora
 function report(){let k=0,out=`Akari Atlas test · ${document.getElementById('who').value||'(no name)'} · ${document.getElementById('dev').value}\n${navigator.userAgent}\n\n`;for(const [g,l] of Object.entries(T)){out+=`— ${g}\n`;l.forEach(t=>{const v=S['t'+k++]||{};out+=`${v.s==='ok'?'✅':v.s==='bad'?'❌':v.s==='na'?'–':'·'} ${k}. ${t}${v.n?'  → '+v.n:''}\n`})}
 const e=JSON.parse(localStorage.getItem('ak_errlog')||'[]');out+=`\nNotes: ${document.getElementById('extra').value||'-'}\n\nError log (${e.length}):\n`+e.map(x=>`${x.t} ${x.s} ${x.m}`).join('\n');return out}
 async function send(){const t=report();try{if(navigator.share)return await navigator.share({title:'Akari Atlas test results',text:t})}catch(e){return}copy()}
-async function copy(){try{await navigator.clipboard.writeText(report());alert('Copied! Paste it in a message to Nae.')}catch(e){prompt('Copy:',report())}}
+async function copy(){try{await navigator.clipboard.writeText(report());alert('Copied! Paste it in a message to the person who asked you to test.')}catch(e){prompt('Copy:',report())}}
 draw();
 </script></main></body></html>
