@@ -42,7 +42,7 @@ function parseItin(text) { const out = []; let day = null, auto = 0; const lines
   let last = 0; out.forEach(x => { if (x.day == null) x.day = last; last = x.day; x.day = Math.max(0, Math.min(Math.max(DAYS.length - 1, 0), x.day)) }); return out.slice(0, 80) }
 /* ---------- geocode ---------- */
 async function itinGeo(name) { const t = (typeof trip === 'function' && trip()) || {}, cc = (t.cc || (t.base && t.base.cc) || '').toLowerCase();
-  let b = (typeof HOSTEL !== 'undefined' && HOSTEL) || null; if (t.base && t.base.cc && cc && t.base.cc !== cc) b = null; /* stay pinned in the wrong country → don't bias to it */
+  let b = (typeof HOSTEL !== 'undefined' && HOSTEL) || null; if (t.base && t.base.cc && cc && t.base.cc !== cc) b = IT.bias || null; /* stay pinned in the wrong country → don't bias to it */
   const country = cc ? (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(cc.toUpperCase()) } catch (e) { return '' } })() : '';
   const k = 'geo_' + cc + '_' + name.toLowerCase(); try { const c = JSON.parse(localStorage.getItem(k) || 'null'); if (c) return c } catch (e) { }
   let r = null; try { const q = name + (country && !name.toLowerCase().includes(country.toLowerCase()) ? ', ' + country : '');
@@ -88,7 +88,7 @@ function itLike(k, b) { const i = IT.likes.indexOf(k); i >= 0 ? IT.likes.splice(
 async function itRun() { const o = $('itOut'), f = $('itF').files[0]; let text = $('itT').value;
   o.innerHTML = '<p class="muted">Reading…</p>'; try { if (f) text = (await itinFileText(f)) + '\n' + text } catch (e) { o.innerHTML = '<p class="muted">Couldn’t read that file — try a PDF, photo or pasted text.</p>'; return }
   const items = parseItin(text); if (!items.length) { o.innerHTML = '<p class="muted">I couldn’t find places in that. Try one place per line, with “Day 1”, “Day 2”… headings.</p>'; return }
-  const found = []; for (let i = 0; i < items.length; i++) { o.innerHTML = `<p class="muted">Finding places on the map… ${i + 1}/${items.length}</p>`; const g = await itinGeo(items[i].name); if (g) found.push({ ...items[i], lat: g.lat, lon: g.lon, kind: g.kind, name: items[i].name, k: '' }); else found.push({ ...items[i], miss: true }) }
+  const found = []; IT.bias = null; for (let i = 0; i < items.length; i++) { o.innerHTML = `<p class="muted">Finding places on the map… ${i + 1}/${items.length}</p>`; const g = await itinGeo(items[i].name); if (g && !IT.bias) IT.bias = [g.lat, g.lon]; if (g) found.push({ ...items[i], lat: g.lat, lon: g.lon, kind: g.kind, name: items[i].name, k: '' }); else found.push({ ...items[i], miss: true }) }
   found.forEach(x => x.k = itKind(x)); IT.items = found;
   const t0 = trip() || {}, okBase = !(t0.base && t0.cc && t0.base.cc && t0.base.cc !== t0.cc), base = okBase ? { lat: HOSTEL[0], lon: HOSTEL[1] } : null, byDay = {}; found.filter(x => !x.miss).forEach(x => (byDay[x.day] = byDay[x.day] || []).push(x));
   const ref = {}; for (const d of Object.keys(byDay)) { o.innerHTML = `<p class="muted">Planning ${DAYS[d] || 'day'}…</p>`; const sug = await suggestFor(+d, byDay[d]); sug.forEach(s => s.k = itKind(s)); ref[d] = refineDay([...byDay[d], ...sug], base || byDay[d][0]) }
