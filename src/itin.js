@@ -54,17 +54,17 @@ function parseItin(text) { IT.firstSlotAt = null; const out = []; let day = null
     const cd = ci(/day|date/), ct = ci(/time|start/), cp = ci(/place|location|activity|what|name|spot/), cn = ci(/note|detail/);
     for (const row of lines.slice(1)) { const c = row.split(',').map(x => x.trim().replace(/^"|"$/g, '')); const nm = cleanName(c[cp >= 0 ? cp : c.length - 1] || ''); if (!nm) continue;
       const di = cd >= 0 ? (dayIndexFromHeader(c[cd]) ?? (/^\d+$/.test(c[cd]) ? +c[cd] - 1 : null)) : null; out.push({ day: di, time: ct >= 0 ? parseTime(c[ct]) || c[ct] || '' : '', name: nm, note: cn >= 0 ? c[cn] || '' : '' }) } return out }
-  let slot = '';
+  let slot = '', slotKeep = '', slotEnd = '';
   for (const l0 of lines) { const l = l0.replace(/\s*\((?![^)]*\d{1,2}(:\d{2})?\s*(am|pm))[^)]*\)/gi, '').trim(); if (!l) continue;
     if (/\b(\d+\s*day\s+)?itinerary\b|\bgetaway\b|have a (great|nice|good)|bon voyage|enjoy your/i.test(l) && !/^day\s*\d/i.test(l)) continue;
     const per = IT_SLOT.test(l0.trim()) || IT_SLOT.test(l) ? l.match(/^(early morning|morning|noon|midday|late afternoon|afternoon|evening|late night|night)/i) : null;
-    if (per) { if (IT.firstSlotAt == null) IT.firstSlotAt = out.filter(x => !x.time).length === out.length ? out.length : 0; slot = parseTime(l) || { 'early morning': '07:00', morning: '09:00', noon: '12:00', midday: '12:00', afternoon: '13:00', 'late afternoon': '15:00', evening: '18:00', night: '19:00', 'late night': '21:00' }[per[1].toLowerCase().split(/\s*\+|\s+to/)[0]] || ''; continue }
+    if (per) { slotKeep = ''; { const ts = [...l.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi)].map(m => parseTime(m[0])); slotEnd = ts[1] || '' } if (IT.firstSlotAt == null) IT.firstSlotAt = out.filter(x => !x.time).length === out.length ? out.length : 0; slot = slotKeep = parseTime(l) || { 'early morning': '07:00', morning: '09:00', noon: '12:00', midday: '12:00', afternoon: '13:00', 'late afternoon': '15:00', evening: '18:00', night: '19:00', 'late night': '21:00' }[per[1].toLowerCase().split(/\s*\+|\s+to/)[0]] || ''; continue }
     if (/^(travel|transfer|take|ride|go back|return|head)\b.*\b(to|via|by)\b/i.test(l.replace(/^[^A-Za-z]*(\(\d+\s*)?/, ''))) continue;
     const di = dayIndexFromHeader(l); const startsDate = /^(day\s*\d{1,2}|d\d{1,2}\b|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}[\/.]\d{1,2}\b|(mon|tue|wed|thu|fri|sat|sun)[a-z]*)/i.test(l); const isHeader = di != null && (startsDate || l.length < 40);
     if (isHeader) { day = di; const rest = cleanName(l.replace(/^\s*((mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*)?(day\s*\d{1,2}|d\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{1,2}[\/.]\d{1,2})\b[:\-–—.,\s]*/i, '')); if (rest && rest.length > 2 && !/^(arrival|departure|itinerary|free day|rest day)$/i.test(rest)) rest.split(/\s+(?:→|->|>|then)\s+|\s*[;,]\s*/).map(cleanName).filter(p => p.length >= 3).forEach(p => out.push({ day, time: parseTime(l) || '', name: p })); continue }
     if (/^(itinerary|trip|budget|total|notes?|hotel|flight|tips?)\s*[:\-]?$/i.test(l) || l.length > 120) continue;
     const nm = cleanName(l); if (!nm || nm.length < 3 || /^\d+$/.test(nm) || /^(check[ -]?(in|out)|hotel|hostel|airport|flight|rest|sleep|free time)\b/i.test(nm)) continue;
-    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) { out.push({ day, time: parseTime(l) || slot || '', name: p, meal: /^\W*(breakfast|brunch|lunch|dinner|snacks?)\b/i.test(l) }); slot = '' } }) }
+    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) { out.push({ day, time: parseTime(l) || slot || '', slot: slotKeep, slotEnd, name: p, meal: /^\W*(breakfast|brunch|lunch|dinner|snacks?)\b/i.test(l) }); slot = '' } }) }
   if (out.length && out.every(x => x.day == null)) { IT.noDays = true; if (out.length <= 10) out.forEach(x => x.day = IT.oneDay ?? (typeof curDay === 'number' ? curDay : 0)); else { const per = IT.pace === 'relaxed' ? 3 : IT.pace === 'packed' ? 5 : 4; out.forEach((x, i) => x.day = Math.min(DAYS.length - 1, Math.floor(i / per) + (DAYS.length > 2 ? 1 : 0))) } } else IT.noDays = false
   if (IT.firstSlotAt != null) out.splice(0, IT.firstSlotAt);
   let last = 0; out.forEach(x => { if (x.day == null) x.day = last; last = x.day; x.day = Math.max(0, Math.min(Math.max(DAYS.length - 1, 0), x.day)) }); return out.slice(0, 80) }
@@ -89,14 +89,16 @@ const IDUR = { night: 100, food: 60, culture: 90, shop: 80, nature: 120, view: 7
 const itHm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), itMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null };
 function itTravel(a, b) { const km = dist(a.lat, a.lon, b.lat, b.lon) * 1.3; return Math.round(km < 1.5 ? km / 4.5 * 60 : km < 8 ? km / 20 * 60 + 10 : km < 60 ? km / 40 * 60 + 15 : km / 70 * 60 + 20) }
 function refineDay(stops, start) { if (!stops.length) return [];
-  if (stops.some(s => s.time && !s.sug)) { /* the source set a timeline: keep its order, flow times between its anchors */
-    const own = stops.filter(s => !s.sug), sug = stops.filter(s => s.sug), seq = [...own.filter(s => s.k !== 'night'), ...sug, ...own.filter(s => s.k === 'night')];
-    const firstA = itMin((own.find(s => s.time) || {}).time); let t = Math.min(firstA ?? 570, 570), prev = null; const out = [];
-    for (const s of (own.some(s => s.k === 'night') ? seq : [...own, ...sug])) { if (prev) t += itTravel(prev, s); const a = itMin(s.time); let why = '';
-      if (a != null) { if (t <= a + 10) { t = a; why = 'your time' } else why = 'later than planned — travel takes ~' + itTravel(prev || s, s) + ' min' }
-      if (s.k === 'night' && t < 1020) { t = 1020; why = 'night markets open after ~5 pm' }
-      out.push({ ...s, time: itHm(Math.round(t / 15) * 15), why: why || (s.sug ? '' : '') }); t += IDUR[s.k]; prev = s }
-    return out }
+  if (stops.some(s => (s.time || s.slot) && !s.sug)) { /* the source set a timeline: keep its order and fit each section's stops inside its time window */
+    const own = stops.filter(s => !s.sug), sug = stops.filter(s => s.sug), groups = [];
+    for (const s of own) { const g = groups[groups.length - 1]; if (g && g.slot === (s.slot || g.slot) && !(s.slot && s.slot !== g.slot)) g.items.push(s); else groups.push({ slot: s.slot || s.time || (g ? '' : ''), end: s.slotEnd, items: [s] }) }
+    const out = []; let t = null, prev = null;
+    groups.forEach((g, gi) => { const a = itMin(g.slot), nx = groups.slice(gi + 1).map(x => itMin(x.slot)).find(x => x != null), n = g.items.length;
+      const start = a != null ? Math.max(a, t ?? a) : (t ?? 570), end = itMin(g.end) != null ? Math.max(itMin(g.end), start + 30 * n) : nx != null ? Math.max(nx, start + 30 * n) : start + n * 75, step = (end - start) / n;
+      g.items.forEach((s, i) => { let tt = start + i * step; if (prev && i > 0) tt = Math.max(tt, out[out.length - 1].m + 30 + itTravel(prev, s)); out.push({ ...s, m: tt, time: itHm(Math.round(tt / 15) * 15), why: a != null && i === 0 ? 'your time' : '' }); prev = s });
+      t = Math.max(end, out[out.length - 1].m + 30); if (nx != null && prev) t = Math.max(t, t) });
+    let tt = t ?? 1020; for (const s of sug) { if (prev) tt += itTravel(prev, s); out.push({ ...s, time: itHm(Math.round(tt / 15) * 15), why: 'fits after your plan' }); tt += IDUR[s.k]; prev = s }
+    return out.map(({ m, ...x }) => x) }
   const fixed = stops.filter(s => s.time), free = stops.filter(s => !s.time), nights = free.filter(s => s.k === 'night'), rest = free.filter(s => s.k !== 'night');
   const ord = []; let cur = start; const pool = rest.slice();
   while (pool.length) { pool.sort((a, b) => dist(cur.lat, cur.lon, a.lat, a.lon) - dist(cur.lat, cur.lon, b.lat, b.lon)); const n = pool.shift(); ord.push(n); cur = n }
