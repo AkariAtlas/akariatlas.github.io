@@ -14,16 +14,26 @@ async function itinImageText(f, onp) {
   const sc = Math.min(3, Math.max(1, 2200 / img.width)), c = document.createElement('canvas'); c.width = img.width * sc; c.height = img.height * sc; const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
   const d = x.getImageData(0, 0, c.width, c.height), p = d.data; for (let i = 0; i < p.length; i += 4) { let g = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]; g = g < 150 ? Math.max(0, g * 0.6) : Math.min(255, g * 1.15); p[i] = p[i + 1] = p[i + 2] = g } x.putImageData(d, 0, 0);
   const { data } = await Tesseract.recognize(c, 'eng', { logger: m => onp && m.progress && onp(Math.round(m.progress * 100)) });
-  /* keep only lines the reader is confident about and that look like words — drops noise from photos and stickers */
-  const good = (data.lines || []).filter(l => { const t = l.text.trim(), letters = (t.match(/[A-Za-z]/g) || []).length, words = (t.match(/[A-Za-z]{3,}/g) || []).length; return l.confidence >= 55 && t.length >= 4 && letters / t.length >= 0.55 && words >= 1 })
-    .map(l => l.text.trim().replace(/^[^A-Za-z0-9(]+/, '').replace(/\s+[^A-Za-z0-9)]{1,3}$/, ''));
-  /* join wrapped lines: a line starting lowercase or "(" continues the previous one */
-  const out = []; for (const t of good) { if (out.length && /^[a-z(]/.test(t)) out[out.length - 1] += ' ' + t; else out.push(t) } return out.join('\n') }
+  return ocrLines((data.words || []).map(w => ({ t: w.text, c: w.confidence, b: w.bbox })), c.width).join('\n') }
+/* rebuild reading order from word boxes: drop low-confidence words, keep the main text column (posters put photos beside the text), re-join wrapped lines */
+function ocrLines(words, W) {const ws=words.filter(w=>w.c>=60&&/[A-Za-z0-9]/.test(w.t)&&(((w.t.match(/[A-Za-z]/g)||[]).length/w.t.length>=0.5)||/^\(?\d/.test(w.t)));
+ ws.forEach(w=>{w.h=w.b.y1-w.b.y0;w.cy=(w.b.y0+w.b.y1)/2});ws.sort((a,b)=>a.cy-b.cy||a.b.x0-b.b.x0);
+ const rows=[];for(const w of ws){let L=rows.find(l=>Math.abs(l.cy-w.cy)<Math.max(l.h,w.h)*0.5);if(!L){L={cy:w.cy,h:w.h,ws:[]};rows.push(L)}L.ws.push(w)}
+ const segs=[];for(const L of rows){L.ws.sort((a,b)=>a.b.x0-b.b.x0);let cur=null;for(const w of L.ws){if(cur&&w.b.x0-cur.x1<L.h*1.6){cur.t+=' '+w.t;cur.x1=w.b.x1;cur.n++}else{cur={t:w.t,x0:w.b.x0,x1:w.b.x1,y:L.cy,h:L.h,n:1};segs.push(cur)}}}
+ let keep=segs.filter(s=>s.n>=2||s.t.length>=6); if(!keep.length) return [];
+ const bw=W*0.05,hist={};keep.forEach(s=>{const k=Math.floor(s.x0/bw);hist[k]=(hist[k]||0)+s.t.length});const main=(+Object.entries(hist).sort((a,b)=>b[1]-a[1])[0][0]+0.5)*bw;
+ const share=keep.filter(s=>Math.abs(s.x0-main)<=bw).length/keep.length;
+ if(share>0.3) keep=keep.filter(s=>s.x0>=main-bw&&s.x0<main+W*0.36);
+ const lines=[];for(const s of keep.sort((a,b)=>a.y-b.y||a.x0-b.x0)){const p=lines[lines.length-1];if(p&&Math.abs(p.y-s.y)<s.h*0.6)p.t+=' '+s.t;else lines.push({t:s.t,y:s.y,h:s.h})}
+ const HD=IT_SLOT;const out=[];for(const l of lines){const p=out[out.length-1];const hdr=p&&HD.test(p.t);const paren=/^\([^()]*\)$/.test(l.t);if(p&&((hdr&&paren&&/\d/.test(l.t))||(!hdr&&(/^[a-z]/.test(l.t)||paren||/^\d+-[a-z]/i.test(l.t)||(l.y-p.y<l.h*1.8&&l.t.split(' ').length<=2&&!HD.test(l.t)&&!/^(travel|lunch|dinner|breakfast)/i.test(l.t))))))p.t+=' '+l.t,p.y=l.y;else out.push({...l})}
+ return out.map(l=>l.t)}
+
 async function itinFileText(f, onp) { const n = (f.name || '').toLowerCase(); if (/^image\//.test(f.type)) return itinImageText(f, onp);
   if (n.endsWith('.docx')) return docxText(f);
   if (n.endsWith('.doc')) { const b = new Uint8Array(await f.arrayBuffer()); let s = '', run = ''; for (const c of b) { if (c >= 32 && c < 127 || c === 10 || c === 13) run += String.fromCharCode(c); else { if (run.length > 3) s += run + '\n'; run = '' } } return s }
   return fileText(f) }
 /* ---------- parse text → [{day, time, name}] ---------- */
+const IT_SLOT = /^(early morning|morning|noon|midday|afternoon|late afternoon|evening|night|late night)(\s*(\+|to|&|and)?\s*(noon|evening|night|afternoon))?\s*(\(.*\)|[\d:apm\s.–-]*)?$/i;
 const IT_WD = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b/i, IT_MON = 'jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
 function dayIndexFromHeader(l) { let m = l.match(/\bday\s*(\d{1,2})\b/i) || l.match(/^d(\d{1,2})\b/i); if (m) return +m[1] - 1;
   const t = (typeof trip === 'function' && trip()) || {}; if (!t.start) return null; const s = new Date(t.start + 'T00:00:00');
@@ -37,7 +47,7 @@ function parseTime(l) { let m = l.match(/\b(\d{1,2})[:.h](\d{2})\s*(am|pm)?\b/i)
   if (m) { h = +m[1]; mi = +m[2]; ap = (m[3] || '').toLowerCase() } else if ((m = l.match(/\b(\d{1,2})\s*(am|pm)\b/i))) { h = +m[1]; ap = m[2].toLowerCase() } else return null;
   if (ap === 'pm' && h < 12) h += 12; if (ap === 'am' && h === 12) h = 0; if (h > 23 || mi > 59) return null; return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') }
 function cleanName(l) { return l.replace(/\b(\d{1,2})[:.h](\d{2})\s*(am|pm)?\b|\b\d{1,2}\s*(am|pm)\b/ig, '').replace(/^\s*[-*•·▪◦\d.)\]]+\s*/, '').replace(/^\s*[-–—:|,]\s*|\s*[-–—:|,]\s*$/g, '')
-  .replace(/^(visit|go to|explore|see|eat at|(early |late )?(lunch|dinner|breakfast|brunch|snacks?|coffee|dessert) (at|in)|shopping (at|in)|then|after that)\s+/i, '').replace(/\s*\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim() }
+  .replace(/^\(\d+\s+/, '').replace(/^(at|in)\s+/i, '').replace(/^(visit|go to|explore|see|eat at|(early |late )?(lunch|dinner|breakfast|brunch|snacks?|coffee|dessert) (at|in)|shopping (at|in)|then|after that)\s+/i, '').replace(/\s*\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim() }
 function parseItin(text) { IT.firstSlotAt = null; const out = []; let day = null, auto = 0; const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const csv = lines.length > 1 && lines[0].split(',').length >= 2 && /day|date|place|time|activity|location/i.test(lines[0]);
   if (csv) { const H = lines[0].split(',').map(h => h.trim().toLowerCase()), ci = k => H.findIndex(h => k.test(h));
@@ -47,9 +57,9 @@ function parseItin(text) { IT.firstSlotAt = null; const out = []; let day = null
   let slot = '';
   for (const l0 of lines) { const l = l0.replace(/\s*\((?![^)]*\d{1,2}(:\d{2})?\s*(am|pm))[^)]*\)/gi, '').trim(); if (!l) continue;
     if (/\b(\d+\s*day\s+)?itinerary\b|\bgetaway\b|have a (great|nice|good)|bon voyage|enjoy your/i.test(l) && !/^day\s*\d/i.test(l)) continue;
-    const per = l.match(/^(early morning|morning(\s*\+\s*noon)?|noon|midday|afternoon|late afternoon(\s*to\s*evening)?|evening|night|late night)\b/i);
+    const per = IT_SLOT.test(l0.trim()) || IT_SLOT.test(l) ? l.match(/^(early morning|morning|noon|midday|late afternoon|afternoon|evening|late night|night)/i) : null;
     if (per) { if (IT.firstSlotAt == null) IT.firstSlotAt = out.filter(x => !x.time).length === out.length ? out.length : 0; slot = parseTime(l) || { 'early morning': '07:00', morning: '09:00', noon: '12:00', midday: '12:00', afternoon: '13:00', 'late afternoon': '15:00', evening: '18:00', night: '19:00', 'late night': '21:00' }[per[1].toLowerCase().split(/\s*\+|\s+to/)[0]] || ''; continue }
-    if (/^(travel|transfer|take|ride|go back|return|head)\b.*\b(to|via|by)\b/i.test(l)) continue;
+    if (/^(travel|transfer|take|ride|go back|return|head)\b.*\b(to|via|by)\b/i.test(l.replace(/^[^A-Za-z]*(\(\d+\s*)?/, ''))) continue;
     const di = dayIndexFromHeader(l); const startsDate = /^(day\s*\d{1,2}|d\d{1,2}\b|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}[\/.]\d{1,2}\b|(mon|tue|wed|thu|fri|sat|sun)[a-z]*)/i.test(l); const isHeader = di != null && (startsDate || l.length < 40);
     if (isHeader) { day = di; const rest = cleanName(l.replace(/^\s*((mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*)?(day\s*\d{1,2}|d\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{1,2}[\/.]\d{1,2})\b[:\-–—.,\s]*/i, '')); if (rest && rest.length > 2 && !/^(arrival|departure|itinerary|free day|rest day)$/i.test(rest)) rest.split(/\s+(?:→|->|>|then)\s+|\s*[;,]\s*/).map(cleanName).filter(p => p.length >= 3).forEach(p => out.push({ day, time: parseTime(l) || '', name: p })); continue }
     if (/^(itinerary|trip|budget|total|notes?|hotel|flight|tips?)\s*[:\-]?$/i.test(l) || l.length > 120) continue;
