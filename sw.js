@@ -1,4 +1,4 @@
-const C='ak-2611140132',DATA='tw-data-v1';const SHELL=['./','./index.html','./manifest.json','./icon.svg','./icon-192.png','./splash.js','./errlog.js','./akari.js','./qrcode.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
+const C='ak-2611140623',DATA='tw-data-v1';const SHELL=['./','./index.html','./manifest.json','./icon.svg','./icon-192.png','./splash.js','./errlog.js','./akari.js','./qrcode.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL).catch(()=>{})));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C&&x!==DATA&&x!=='tw-tiles').map(x=>caches.delete(x)))));self.clients.claim()});
 const net=(req,cache)=>fetch(req).then(r=>{if(r.ok){const cl=r.clone();caches.open(cache).then(c=>c.put(req,cl))}return r}).catch(()=>caches.match(req).then(r=>r||Promise.reject('offline')));

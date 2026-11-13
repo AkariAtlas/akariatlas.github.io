@@ -8,7 +8,18 @@ const IT = { likes: JSON.parse(localStorage.getItem('ak_likes') || '["food","cul
 async function docxText(f) { if (!window.JSZip) await new Promise((r, j) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'; s.onload = r; s.onerror = j; document.head.appendChild(s) });
   const z = await JSZip.loadAsync(await f.arrayBuffer()), x = await z.file('word/document.xml').async('string');
   return x.replace(/<\/w:p>/g, '\n').replace(/<w:tab\/>/g, '\t').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') }
-async function itinFileText(f) { const n = (f.name || '').toLowerCase();
+async function itinImageText(f, onp) {
+  if (!window.Tesseract) await new Promise((r, j) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'; s.onload = r; s.onerror = j; document.head.appendChild(s) });
+  const img = await new Promise((r, j) => { const i = new Image(); i.onload = () => r(i); i.onerror = j; i.src = URL.createObjectURL(f) });
+  const sc = Math.min(3, Math.max(1, 2200 / img.width)), c = document.createElement('canvas'); c.width = img.width * sc; c.height = img.height * sc; const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data; for (let i = 0; i < p.length; i += 4) { let g = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]; g = g < 150 ? Math.max(0, g * 0.6) : Math.min(255, g * 1.15); p[i] = p[i + 1] = p[i + 2] = g } x.putImageData(d, 0, 0);
+  const { data } = await Tesseract.recognize(c, 'eng', { logger: m => onp && m.progress && onp(Math.round(m.progress * 100)) });
+  /* keep only lines the reader is confident about and that look like words — drops noise from photos and stickers */
+  const good = (data.lines || []).filter(l => { const t = l.text.trim(), letters = (t.match(/[A-Za-z]/g) || []).length, words = (t.match(/[A-Za-z]{3,}/g) || []).length; return l.confidence >= 55 && t.length >= 4 && letters / t.length >= 0.55 && words >= 1 })
+    .map(l => l.text.trim().replace(/^[^A-Za-z0-9(]+/, '').replace(/\s+[^A-Za-z0-9)]{1,3}$/, ''));
+  /* join wrapped lines: a line starting lowercase or "(" continues the previous one */
+  const out = []; for (const t of good) { if (out.length && /^[a-z(]/.test(t)) out[out.length - 1] += ' ' + t; else out.push(t) } return out.join('\n') }
+async function itinFileText(f, onp) { const n = (f.name || '').toLowerCase(); if (/^image\//.test(f.type)) return itinImageText(f, onp);
   if (n.endsWith('.docx')) return docxText(f);
   if (n.endsWith('.doc')) { const b = new Uint8Array(await f.arrayBuffer()); let s = '', run = ''; for (const c of b) { if (c >= 32 && c < 127 || c === 10 || c === 13) run += String.fromCharCode(c); else { if (run.length > 3) s += run + '\n'; run = '' } } return s }
   return fileText(f) }
@@ -26,19 +37,26 @@ function parseTime(l) { let m = l.match(/\b(\d{1,2})[:.h](\d{2})\s*(am|pm)?\b/i)
   if (m) { h = +m[1]; mi = +m[2]; ap = (m[3] || '').toLowerCase() } else if ((m = l.match(/\b(\d{1,2})\s*(am|pm)\b/i))) { h = +m[1]; ap = m[2].toLowerCase() } else return null;
   if (ap === 'pm' && h < 12) h += 12; if (ap === 'am' && h === 12) h = 0; if (h > 23 || mi > 59) return null; return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0') }
 function cleanName(l) { return l.replace(/\b(\d{1,2})[:.h](\d{2})\s*(am|pm)?\b|\b\d{1,2}\s*(am|pm)\b/ig, '').replace(/^\s*[-*•·▪◦\d.)\]]+\s*/, '').replace(/^\s*[-–—:|,]\s*|\s*[-–—:|,]\s*$/g, '')
-  .replace(/^(visit|go to|explore|see|eat at|lunch at|dinner at|breakfast at|shopping at|then|after that)\s+/i, '').replace(/\s{2,}/g, ' ').trim() }
-function parseItin(text) { const out = []; let day = null, auto = 0; const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  .replace(/^(visit|go to|explore|see|eat at|(early |late )?(lunch|dinner|breakfast|brunch|snacks?|coffee|dessert) (at|in)|shopping (at|in)|then|after that)\s+/i, '').replace(/\s*\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim() }
+function parseItin(text) { IT.firstSlotAt = null; const out = []; let day = null, auto = 0; const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const csv = lines.length > 1 && lines[0].split(',').length >= 2 && /day|date|place|time|activity|location/i.test(lines[0]);
   if (csv) { const H = lines[0].split(',').map(h => h.trim().toLowerCase()), ci = k => H.findIndex(h => k.test(h));
     const cd = ci(/day|date/), ct = ci(/time|start/), cp = ci(/place|location|activity|what|name|spot/), cn = ci(/note|detail/);
     for (const row of lines.slice(1)) { const c = row.split(',').map(x => x.trim().replace(/^"|"$/g, '')); const nm = cleanName(c[cp >= 0 ? cp : c.length - 1] || ''); if (!nm) continue;
       const di = cd >= 0 ? (dayIndexFromHeader(c[cd]) ?? (/^\d+$/.test(c[cd]) ? +c[cd] - 1 : null)) : null; out.push({ day: di, time: ct >= 0 ? parseTime(c[ct]) || c[ct] || '' : '', name: nm, note: cn >= 0 ? c[cn] || '' : '' }) } return out }
-  for (const l of lines) { const di = dayIndexFromHeader(l); const startsDate = /^(day\s*\d{1,2}|d\d{1,2}\b|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}[\/.]\d{1,2}\b|(mon|tue|wed|thu|fri|sat|sun)[a-z]*)/i.test(l); const isHeader = di != null && (startsDate || l.length < 40);
+  let slot = '';
+  for (const l0 of lines) { const l = l0.replace(/\s*\((?![^)]*\d{1,2}(:\d{2})?\s*(am|pm))[^)]*\)/gi, '').trim(); if (!l) continue;
+    if (/\b(\d+\s*day\s+)?itinerary\b|\bgetaway\b|have a (great|nice|good)|bon voyage|enjoy your/i.test(l) && !/^day\s*\d/i.test(l)) continue;
+    const per = l.match(/^(early morning|morning(\s*\+\s*noon)?|noon|midday|afternoon|late afternoon(\s*to\s*evening)?|evening|night|late night)\b/i);
+    if (per) { if (IT.firstSlotAt == null) IT.firstSlotAt = out.filter(x => !x.time).length === out.length ? out.length : 0; slot = parseTime(l) || { 'early morning': '07:00', morning: '09:00', noon: '12:00', midday: '12:00', afternoon: '13:00', 'late afternoon': '15:00', evening: '18:00', night: '19:00', 'late night': '21:00' }[per[1].toLowerCase().split(/\s*\+|\s+to/)[0]] || ''; continue }
+    if (/^(travel|transfer|take|ride|go back|return|head)\b.*\b(to|via|by)\b/i.test(l)) continue;
+    const di = dayIndexFromHeader(l); const startsDate = /^(day\s*\d{1,2}|d\d{1,2}\b|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}[\/.]\d{1,2}\b|(mon|tue|wed|thu|fri|sat|sun)[a-z]*)/i.test(l); const isHeader = di != null && (startsDate || l.length < 40);
     if (isHeader) { day = di; const rest = cleanName(l.replace(/^\s*((mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*)?(day\s*\d{1,2}|d\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{1,2}[\/.]\d{1,2})\b[:\-–—.,\s]*/i, '')); if (rest && rest.length > 2 && !/^(arrival|departure|itinerary|free day|rest day)$/i.test(rest)) rest.split(/\s+(?:→|->|>|then)\s+|\s*[;,]\s*/).map(cleanName).filter(p => p.length >= 3).forEach(p => out.push({ day, time: parseTime(l) || '', name: p })); continue }
     if (/^(itinerary|trip|budget|total|notes?|hotel|flight|tips?)\s*[:\-]?$/i.test(l) || l.length > 120) continue;
     const nm = cleanName(l); if (!nm || nm.length < 3 || /^\d+$/.test(nm) || /^(check[ -]?(in|out)|hotel|hostel|airport|flight|rest|sleep|free time)\b/i.test(nm)) continue;
-    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) out.push({ day, time: parseTime(l) || '', name: p }) }) }
-  if (out.length && out.every(x => x.day == null)) { const per = IT.pace === 'relaxed' ? 3 : IT.pace === 'packed' ? 5 : 4; out.forEach((x, i) => x.day = Math.min(DAYS.length - 1, Math.floor(i / per) + (DAYS.length > 2 ? 1 : 0))) }
+    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) { out.push({ day, time: parseTime(l) || slot || '', name: p }); slot = '' } }) }
+  if (out.length && out.every(x => x.day == null)) { IT.noDays = true; if (out.length <= 10) out.forEach(x => x.day = IT.oneDay ?? (typeof curDay === 'number' ? curDay : 0)); else { const per = IT.pace === 'relaxed' ? 3 : IT.pace === 'packed' ? 5 : 4; out.forEach((x, i) => x.day = Math.min(DAYS.length - 1, Math.floor(i / per) + (DAYS.length > 2 ? 1 : 0))) } } else IT.noDays = false
+  if (IT.firstSlotAt != null) out.splice(0, IT.firstSlotAt);
   let last = 0; out.forEach(x => { if (x.day == null) x.day = last; last = x.day; x.day = Math.max(0, Math.min(Math.max(DAYS.length - 1, 0), x.day)) }); return out.slice(0, 80) }
 /* ---------- geocode ---------- */
 async function itinGeo(name) { const t = (typeof trip === 'function' && trip()) || {}, cc = (t.cc || (t.base && t.base.cc) || '').toLowerCase();
@@ -86,9 +104,18 @@ function openItinImport() { $('sheet').classList.add('on'); $('sheet').innerHTML
   <button class="act" style="width:100%;margin-top:12px" onclick="itRun()">🔍 Read my itinerary</button><div id="itOut" style="margin-top:12px"></div></div>` }
 function itLike(k, b) { const i = IT.likes.indexOf(k); i >= 0 ? IT.likes.splice(i, 1) : IT.likes.push(k); b.classList.toggle('on', i < 0); localStorage.setItem('ak_likes', JSON.stringify(IT.likes)) }
 async function itRun() { const o = $('itOut'), f = $('itF').files[0]; let text = $('itT').value;
-  o.innerHTML = '<p class="muted">Reading…</p>'; try { if (f) text = (await itinFileText(f)) + '\n' + text } catch (e) { o.innerHTML = '<p class="muted">Couldn’t read that file — try a PDF, photo or pasted text.</p>'; return }
-  const items = parseItin(text); if (!items.length) { o.innerHTML = '<p class="muted">I couldn’t find places in that. Try one place per line, with “Day 1”, “Day 2”… headings.</p>'; return }
-  const found = []; IT.bias = null; for (let i = 0; i < items.length; i++) { o.innerHTML = `<p class="muted">Finding places on the map… ${i + 1}/${items.length}</p>`; const g = await itinGeo(items[i].name); if (g && !IT.bias) IT.bias = [g.lat, g.lon]; if (g) found.push({ ...items[i], lat: g.lat, lon: g.lon, kind: g.kind, name: items[i].name, k: '' }); else found.push({ ...items[i], miss: true }) }
+  o.innerHTML = '<p class="muted">Reading…</p>'; try { if (f) text = (await itinFileText(f, p => o.innerHTML = `<p class="muted">Reading the picture… ${p}%</p>`)) + '\n' + text } catch (e) { o.innerHTML = '<p class="muted">Couldn’t read that file — try a PDF, a clearer photo, or paste the text.</p>'; return }
+  text = text.trim(); if (!text) { o.innerHTML = '<p class="muted">Nothing readable found. Try a sharper photo or paste the text.</p>'; return }
+  IT.oneDay = null; parseItin(text);
+  o.innerHTML = `<div class="card" style="padding:12px;margin:0"><b>Here’s what I read — fix anything before planning</b><p class="muted" style="margin:4px 0 8px;font-size:13px">One place per line. Use “Day 1”, “Day 2”… or dates to split days. Lines like “Travel to … via …” are skipped.</p>
+   <textarea id="itRev" rows="${Math.min(14, text.split('\n').length + 1)}" style="width:100%;box-sizing:border-box">${esc(text)}</textarea>
+   ${IT.noDays ? `<label class="muted" style="display:block;margin:8px 0">No days found — put these on <select id="itDay">${DAYS.map((d, i) => `<option value="${i}" ${i === (typeof curDay === 'number' ? curDay : 0) ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></label>` : ''}
+   <button class="act" style="width:100%;margin-top:8px" onclick="itPlan()">✨ Plan it</button></div>` }
+async function itPlan() { const o = $('itOut'), text = $('itRev').value; IT.oneDay = $('itDay') ? +$('itDay').value : null;
+  const items = parseItin(text); if (!items.length) { o.insertAdjacentHTML('beforeend', '<p class="muted">I couldn’t find places in that. One place per line works best.</p>'); return }
+  const found = []; IT.bias = null; for (let i = 0; i < items.length; i++) { o.innerHTML = `<p class="muted">Finding places on the map… ${i + 1}/${items.length}</p>`; let g = await itinGeo(items[i].name);
+    if (!g && / and |&/.test(items[i].name)) { for (const part of items[i].name.split(/\s+(?:and|&)\s+/)) { const g2 = await itinGeo(part); if (g2) { if (!IT.bias) IT.bias = [g2.lat, g2.lon]; found.push({ ...items[i], name: part, lat: g2.lat, lon: g2.lon, kind: g2.kind }) } } continue }
+    if (g && !IT.bias) IT.bias = [g.lat, g.lon]; if (g) found.push({ ...items[i], lat: g.lat, lon: g.lon, kind: g.kind, name: items[i].name, k: '' }); else found.push({ ...items[i], miss: true }) }
   found.forEach(x => x.k = itKind(x)); IT.items = found;
   const t0 = trip() || {}, okBase = !(t0.base && t0.cc && t0.base.cc && t0.base.cc !== t0.cc), base = okBase ? { lat: HOSTEL[0], lon: HOSTEL[1] } : null, byDay = {}; found.filter(x => !x.miss).forEach(x => (byDay[x.day] = byDay[x.day] || []).push(x));
   const ref = {}; for (const d of Object.keys(byDay)) { o.innerHTML = `<p class="muted">Planning ${DAYS[d] || 'day'}…</p>`; const sug = await suggestFor(+d, byDay[d]); sug.forEach(s => s.k = itKind(s)); ref[d] = refineDay([...byDay[d], ...sug], base || byDay[d][0]) }
@@ -100,7 +127,7 @@ function itShow() { const o = $('itOut'), miss = IT.items.filter(x => x.miss);
       return `<div class="lvRow"><span>${x.sug ? '✨' : inCur ? '•' : '<b style="color:#9CAF88">＋</b>'} ${esc(x.name)}${x.sug ? ' <span class="muted" style="font-size:12px">suggested for you</span>' : ''}${x.why ? ` <span class="muted" style="font-size:12px">· ${esc(x.why)}</span>` : ''}</span><b>${esc(x.time || '')}</b></div>` }).join('');
     const gone = (D.routes[d] || []).filter(r => !nwN.some(n => n.includes(r[0].toLowerCase()) || r[0].toLowerCase().includes(n))); removed += gone.length;
     return `<div class="lvSec"><h3>${esc(DAYS[d] || 'Day ' + (+d + 1))}</h3>${rows}${gone.length ? `<div class="muted" style="font-size:13px;margin-top:4px">Not in your file (kept unless you replace): ${gone.map(g => esc(g[0])).join(', ')}</div>` : ''}</div>` }).join('');
-  o.innerHTML = `<div class="card" style="padding:12px;margin:0"><b>What changes</b><p class="muted" style="margin:4px 0 8px">＋ ${added} new · • ${kept} already planned · ${removed} in your plan but not in the file${miss.length ? ` · couldn’t find on the map: ${miss.map(m => esc(m.name)).join(', ')}` : ''}</p>${html}
+  o.innerHTML = `<div class="card" style="padding:12px;margin:0"><b>What changes</b><p class="muted" style="margin:4px 0 8px">＋ ${added} new · • ${kept} already planned · ${removed} in your plan but not in the file${miss.length ? ` · couldn’t find on the map: ${miss.slice(0, 6).map(m => esc(m.name)).join(', ')}${miss.length > 6 ? ` +${miss.length - 6} more` : ''}` : ''}</p>${html}
    <p class="muted" style="font-size:12px">Order is arranged to cut travel; times allow for getting there, meals around 11:30 and 6:30, and night markets after dark. Times you wrote stay as you wrote them.</p>
    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="act" onclick="itApply('merge')">✨ Add to my plan</button><button class="pill" onclick="itApply('replace')">Replace those days</button><button class="pill" onclick="IT.plan&&Object.values(IT.plan).forEach(d=>d.splice(0,d.length,...d.filter(x=>!x.sug)));itShow()">Remove ✨ suggestions</button></div></div>` }
 function itApply(mode) { D.stopx = D.stopx || {}; D.manualStops = 1;
