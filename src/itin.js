@@ -119,7 +119,7 @@ function dayX(d) { return (D.routes[d] || []).map((_, k) => (D.stopx || {})[d + 
 function setDayX(d, ex) { D.stopx = D.stopx || {}; Object.keys(D.stopx).filter(k => k.startsWith(d + ':')).forEach(k => delete D.stopx[k]); ex.forEach((e, k) => { if (e && Object.keys(e).length) D.stopx[d + ':' + k] = e }) }
 function autoTimeOn() { return localStorage.getItem('ak_autotime') !== '0' }
 function retimeDay(d) { const r = D.routes[d] || [], ex = dayX(d); if (!r.length) return;
-  let t = itMin(ex[0].time) ?? (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570), prev = null;
+  let t = (ex[0].lock && itMin(ex[0].time)) ?? (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570), prev = null;
   r.forEach((x, k) => { const s = { name: x[0], lat: x[1], lon: x[2] }, kd = itKind(s); if (prev && x[1] != null && prev.lat != null) t += itTravel(prev, s);
     if (ex[k].lock && itMin(ex[k].time) != null) t = itMin(ex[k].time); else if (/check-?out|departure|airport/i.test(x[0]) && ex[k].time) t = Math.max(t, itMin(ex[k].time) || t);
     else { if (kd === 'night' && t < 1020) t = 1020; ex[k] = { ...ex[k], time: itHm(Math.round(t / 15) * 15) } }
