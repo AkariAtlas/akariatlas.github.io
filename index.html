@@ -97,7 +97,7 @@ body.dark .skyrect,body.night .skyrect{fill:#1b2d45}body.dark .skyrect2,body.nig
 #navBar{position:fixed;left:8px;right:8px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:25;display:none}#navBar.on{display:block}.navIn{background:var(--inbg);border-radius:18px;padding:12px 14px;box-shadow:0 8px 24px #0004;border:2px solid #3b82f6;max-width:740px;margin:0 auto}
 </style>
 </head>
-<body><script src="splash.js?v=2611130642"></script><script src="errlog.js?v=2611130642"></script>
+<body><script src="splash.js?v=2611131329"></script><script src="errlog.js?v=2611131329"></script>
 <div class="scene" style="position:sticky;top:0;z-index:5">
 <svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMid slice"><rect width="400" height="160" fill="#91CBE0" class="skyrect"/><rect y="60" width="400" height="100" fill="#cfe7ef" opacity=".55" class="skyrect2"/>
 <circle id="sunmoon" cx="335" cy="38" r="17" fill="#E7BD68"/>
@@ -163,7 +163,7 @@ body.dark .skyrect,body.night .skyrect{fill:#1b2d45}body.dark .skyrect2,body.nig
 <section class="view" id="v-docs">
 <div class="card"><h2>⚙️ Sync & settings</h2>
 <label class="muted" style="display:none">Apps Script backend URL (one-time)<input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec" onchange="CFG.API=this.value.trim();localStorage.setItem('tw_api',CFG.API)"></label>
-<div id="gdInfo" style="margin:8px 0"></div><details><summary class="muted">Or use shared sync (invite link)</summary><div id="tripInfo" style="margin-top:8px"></div></details>
+<div id="gdInfo" style="margin:8px 0"></div><div style="margin:8px 0"><button class="pill" onclick="document.getElementById('tripFile').click()">📥 Import trip file</button><input id="tripFile" type="file" accept=".json,application/json" hidden onchange="importTripFile(this.files[0]);this.value=''"><p class="muted" style="font-size:12px;margin:4px 0 0">Restore a saved trip (.json). The file is read on this device only.</p></div><details><summary class="muted">Or use shared sync (invite link)</summary><div id="tripInfo" style="margin-top:8px"></div></details>
 <button class="act" style="margin-top:8px" onclick="openWizard()">✈️ Trip settings (dates, stay, travellers)</button><label class="muted" style="display:block;margin-top:8px">Voice (US English)<div class="row"><select id="voicePick" style="flex:1" onchange="D.voiceName=this.value;save()"></select><button class="pill" onclick="speak('Hi! I\'m your Taiwan travel buddy. Ready when you are.')">▶️ Test</button></div></label><p class="muted">For the most natural voice on iPhone: Settings → Accessibility → Spoken Content → Voices → English (US) → download <b>Ava (Premium)</b> or <b>Samantha (Enhanced)</b>.</p><label class="chk"><input type="checkbox" id="voiceOn" onchange="D.voice=this.checked;save()"> Talk to me: announce weather, pins and spending aloud</label></div>
 <div class="card"><h2>🎫 My bookings (private)</h2><p class="muted">Saved only on your phone and in your own Google Sheet, never in the public code.</p><div id="book"></div></div>
 <div class="card"><h2>🧳 My trips</h2><p class="muted">Every trip you plan is kept here, with its spending and stops, so you can look back anytime.</p><div id="tripsList"></div><button class="act" style="margin-top:8px" onclick="newTrip()">＋ Plan a new trip</button></div>
@@ -181,7 +181,7 @@ body.dark .skyrect,body.night .skyrect{fill:#1b2d45}body.dark .skyrect2,body.nig
 <button data-v="docs"><span>📋</span>Docs</button>
 </nav>
 <div class="toast" id="toast"></div><div id="sheet"></div><div id="navBar"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="akari.js?v=2611130642"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="akari.js?v=2611131329"></script>
 
 
 </body></html>

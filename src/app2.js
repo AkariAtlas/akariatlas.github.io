@@ -187,3 +187,11 @@ async function convert(){const f=$('cvFrom').value,t=$('cvTo').value,a=+$('cvAmt
 function swapCv(){const a=$('cvFrom').value;$('cvFrom').value=$('cvTo').value;$('cvTo').value=a;convert()}
 // Make sure the converter always has its currency lists
 (function ensureCur(){const go=()=>{try{if(!$('cvFrom').options.length)renderCur()}catch(e){}};go();setTimeout(go,800);document.addEventListener('click',e=>{if(e.target.closest('[data-v=money]'))setTimeout(go,50)})})();
+
+async function importTripFile(f){if(!f)return;try{const j=JSON.parse(await f.text());if(!j||j.akariTrip!==1||!j.trip||!j.trip.start)throw 0;
+ if(D.trip&&D.trip.name&&!confirm('Replace the current trip details ("'+D.trip.name+'") with "'+(j.trip.name||'imported trip')+'"? Itinerary, budget and other lists you already have are kept.'))return;
+ D.trip=j.trip;if(Array.isArray(j.bud)&&!(D.bud&&D.bud.some(x=>x.a)))D.bud=j.bud;if(Array.isArray(j.gifts)&&!(D.gifts&&D.gifts.length))D.gifts=j.gifts;
+ save();try{await push()}catch(e){}toast('Trip imported ✓');try{renderAll()}catch(e){location.reload()}}catch(e){toast('That file is not an Akari trip file')}}
+
+(function(){try{if(/#gmail-on\b/.test(location.hash)){localStorage.setItem('ak_gmail','1');history.replaceState(null,'',location.pathname);setTimeout(()=>toast('Gmail import turned on for this device'),800)}if(/#gmail-off\b/.test(location.hash)){localStorage.removeItem('ak_gmail');history.replaceState(null,'',location.pathname)}}catch(e){}})();
+(function(){const r0=renderSettings;renderSettings=function(){r0.apply(this,arguments);try{if(localStorage.getItem('ak_gmail')==='1'&&!document.getElementById('gmBtn')){const g=document.getElementById('gdInfo');g&&g.insertAdjacentHTML('afterend','<div id="gmBtn" style="margin:8px 0"><button class="pill" onclick="gmailImport()">📧 Find my bookings in Gmail</button><p class="muted" style="font-size:12px;margin:4px 0 0">Private to this device. Reads booking emails on this device only.</p></div>')}}catch(e){}}})();

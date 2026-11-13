@@ -97,7 +97,7 @@ function parseHotel(t, subject) { const ci = t.match(/Check-?in[^\n]{0,15}?\b([A
   const addr = (t.match(/\n([^\n]{8,120}(?:Taiwan|台灣|臺灣|District|區)[^\n]{0,40})/) || [])[1] || ''; const zh = (t.match(/([一-鿿][一-鿿0-9段巷弄號樓之\-]{6,40}[號樓])/) || [])[1] || '';
   return { name: name.trim(), addr: addr.replace(/ - Show directions/i, '').trim(), zh, start: pDate(ci[1]), end: pDate(co && co[1]) } }
 let gmTok = null;
-async function gmailImport() { return openPasteImport();
+async function gmailImport() { if (localStorage.getItem('ak_gmail') !== '1') return openPasteImport();
   if (!gdAvailable()) return toast('Google sign-in not set up');
   const st = $('gmStatus'); st.innerHTML = '🔐 Choose the Google account that has your booking emails…'; await loadGIS();
   gmTok = await new Promise(res => { google.accounts.oauth2.initTokenClient({ client_id: GOOGLE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/gmail.readonly', prompt: 'select_account', callback: r => res(r.error ? null : r.access_token) }).requestAccessToken() });
