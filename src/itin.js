@@ -64,7 +64,7 @@ function parseItin(text) { IT.firstSlotAt = null; const out = []; let day = null
     if (isHeader) { day = di; const rest = cleanName(l.replace(/^\s*((mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s*)?(day\s*\d{1,2}|d\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|\d{1,2}[\/.]\d{1,2})\b[:\-–—.,\s]*/i, '')); if (rest && rest.length > 2 && !/^(arrival|departure|itinerary|free day|rest day)$/i.test(rest)) rest.split(/\s+(?:→|->|>|then)\s+|\s*[;,]\s*/).map(cleanName).filter(p => p.length >= 3).forEach(p => out.push({ day, time: parseTime(l) || '', name: p })); continue }
     if (/^(itinerary|trip|budget|total|notes?|hotel|flight|tips?)\s*[:\-]?$/i.test(l) || l.length > 120) continue;
     const nm = cleanName(l); if (!nm || nm.length < 3 || /^\d+$/.test(nm) || /^(check[ -]?(in|out)|hotel|hostel|airport|flight|rest|sleep|free time)\b/i.test(nm)) continue;
-    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) { out.push({ day, time: parseTime(l) || slot || '', name: p }); slot = '' } }) }
+    nm.split(/\s+(?:→|->|>|then)\s+|\s*;\s*/).forEach(part => { const p = cleanName(part); if (p.length >= 3) { out.push({ day, time: parseTime(l) || slot || '', name: p, meal: /^\W*(breakfast|brunch|lunch|dinner|snacks?)\b/i.test(l) }); slot = '' } }) }
   if (out.length && out.every(x => x.day == null)) { IT.noDays = true; if (out.length <= 10) out.forEach(x => x.day = IT.oneDay ?? (typeof curDay === 'number' ? curDay : 0)); else { const per = IT.pace === 'relaxed' ? 3 : IT.pace === 'packed' ? 5 : 4; out.forEach((x, i) => x.day = Math.min(DAYS.length - 1, Math.floor(i / per) + (DAYS.length > 2 ? 1 : 0))) } } else IT.noDays = false
   if (IT.firstSlotAt != null) out.splice(0, IT.firstSlotAt);
   let last = 0; out.forEach(x => { if (x.day == null) x.day = last; last = x.day; x.day = Math.max(0, Math.min(Math.max(DAYS.length - 1, 0), x.day)) }); return out.slice(0, 80) }
@@ -77,16 +77,26 @@ async function itinGeo(name) { const t = (typeof trip === 'function' && trip()) 
     const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}${b ? `&lat=${b[0]}&lon=${b[1]}` : ''}&limit=5&lang=en`)).json();
     let fs = (j.features || []).filter(f => !cc || (f.properties.countrycode || '').toLowerCase() === cc).map(f => ({ name: f.properties.name || name, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], kind: (f.properties.osm_value || '') + ' ' + (f.properties.osm_key || '') }));
     if (b) fs.sort((x, y) => dist(b[0], b[1], x.lat, x.lon) - dist(b[0], b[1], y.lat, y.lon)); r = fs[0] || null } catch (e) { }
+  if (!r) for (const q of [name, name.replace(/\b(night market|old street|colorful houses|village|plaza|station)\b.*$/i, '$1')].filter((x, i, a) => a.indexOf(x) === i)) { try { await new Promise(w => setTimeout(w, 1100));
+      const j = await (await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&accept-language=en${cc ? '&countrycodes=' + cc : ''}`)).json(); if (j[0]) { r = { name, lat: +j[0].lat, lon: +j[0].lon, kind: j[0].type || '' }; break } } catch (e) { } }
   if (!r && b) try { const n = await nomQ(name, b[0], b[1], 1, 200); if (n[0]) r = { ...n[0], kind: '' } } catch (e) { }
   if (r) try { localStorage.setItem(k, JSON.stringify(r)) } catch (e) { } return r }
 /* ---------- refine ---------- */
-function itKind(x) { const s = (x.name + ' ' + (x.kind || '')).toLowerCase();
+function itKind(x) { if (x.meal) return 'food'; const s = (x.name + ' ' + (x.kind || '')).toLowerCase();
   return /night ?market|夜市/.test(s) ? 'night' : /restaurant|food|eat|cafe|coffee|lunch|dinner|breakfast|noodle|dumpling|ramen|bbq|hot ?pot|tea/.test(s) ? 'food' : /museum|gallery|temple|shrine|memorial|palace|hall/.test(s) ? 'culture'
     : /mall|market|shop|street|district|ximending|department/.test(s) ? 'shop' : /park|mountain|trail|hike|lake|beach|garden|falls/.test(s) ? 'nature' : /101|tower|view|observ/.test(s) ? 'view' : 'sight' }
 const IDUR = { night: 100, food: 60, culture: 90, shop: 80, nature: 120, view: 75, sight: 75 };
 const itHm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), itMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null };
-function itTravel(a, b) { const km = dist(a.lat, a.lon, b.lat, b.lon) * 1.3; return Math.round(km < 1.5 ? km / 4.5 * 60 : km < 40 ? km / 22 * 60 + 10 : km / 70 * 60 + 20) }
+function itTravel(a, b) { const km = dist(a.lat, a.lon, b.lat, b.lon) * 1.3; return Math.round(km < 1.5 ? km / 4.5 * 60 : km < 8 ? km / 20 * 60 + 10 : km < 60 ? km / 40 * 60 + 15 : km / 70 * 60 + 20) }
 function refineDay(stops, start) { if (!stops.length) return [];
+  if (stops.some(s => s.time && !s.sug)) { /* the source set a timeline: keep its order, flow times between its anchors */
+    const own = stops.filter(s => !s.sug), sug = stops.filter(s => s.sug), seq = [...own.filter(s => s.k !== 'night'), ...sug, ...own.filter(s => s.k === 'night')];
+    const firstA = itMin((own.find(s => s.time) || {}).time); let t = Math.min(firstA ?? 570, 570), prev = null; const out = [];
+    for (const s of (own.some(s => s.k === 'night') ? seq : [...own, ...sug])) { if (prev) t += itTravel(prev, s); const a = itMin(s.time); let why = '';
+      if (a != null) { if (t <= a + 10) { t = a; why = 'your time' } else why = 'later than planned — travel takes ~' + itTravel(prev || s, s) + ' min' }
+      if (s.k === 'night' && t < 1020) { t = 1020; why = 'night markets open after ~5 pm' }
+      out.push({ ...s, time: itHm(Math.round(t / 15) * 15), why: why || (s.sug ? '' : '') }); t += IDUR[s.k]; prev = s }
+    return out }
   const fixed = stops.filter(s => s.time), free = stops.filter(s => !s.time), nights = free.filter(s => s.k === 'night'), rest = free.filter(s => s.k !== 'night');
   const ord = []; let cur = start; const pool = rest.slice();
   while (pool.length) { pool.sort((a, b) => dist(cur.lat, cur.lon, a.lat, a.lon) - dist(cur.lat, cur.lon, b.lat, b.lon)); const n = pool.shift(); ord.push(n); cur = n }
