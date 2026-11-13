@@ -41,11 +41,15 @@ function parseItin(text) { const out = []; let day = null, auto = 0; const lines
   if (out.length && out.every(x => x.day == null)) { const per = IT.pace === 'relaxed' ? 3 : IT.pace === 'packed' ? 5 : 4; out.forEach((x, i) => x.day = Math.min(DAYS.length - 1, Math.floor(i / per) + (DAYS.length > 2 ? 1 : 0))) }
   let last = 0; out.forEach(x => { if (x.day == null) x.day = last; last = x.day; x.day = Math.max(0, Math.min(Math.max(DAYS.length - 1, 0), x.day)) }); return out.slice(0, 80) }
 /* ---------- geocode ---------- */
-async function itinGeo(name) { const b = (typeof HOSTEL !== 'undefined' && HOSTEL) || [25.04, 121.53], k = 'geo_' + name.toLowerCase();
-  try { const c = JSON.parse(localStorage.getItem(k) || 'null'); if (c) return c } catch (e) { }
-  let r = null; try { const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(name)}&lat=${b[0]}&lon=${b[1]}&limit=3&lang=en`)).json();
-    const f = (j.features || []).map(f => ({ name: f.properties.name || name, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], kind: (f.properties.osm_value || '') + ' ' + (f.properties.osm_key || '') })).filter(p => dist(b[0], b[1], p.lat, p.lon) < 250)[0]; r = f || null } catch (e) { }
-  if (!r) try { const n = await nomQ(name, b[0], b[1], 1, 200); if (n[0]) r = { ...n[0], kind: '' } } catch (e) { }
+async function itinGeo(name) { const t = (typeof trip === 'function' && trip()) || {}, cc = (t.cc || (t.base && t.base.cc) || '').toLowerCase();
+  let b = (typeof HOSTEL !== 'undefined' && HOSTEL) || null; if (t.base && t.base.cc && cc && t.base.cc !== cc) b = null; /* stay pinned in the wrong country → don't bias to it */
+  const country = cc ? (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(cc.toUpperCase()) } catch (e) { return '' } })() : '';
+  const k = 'geo_' + cc + '_' + name.toLowerCase(); try { const c = JSON.parse(localStorage.getItem(k) || 'null'); if (c) return c } catch (e) { }
+  let r = null; try { const q = name + (country && !name.toLowerCase().includes(country.toLowerCase()) ? ', ' + country : '');
+    const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}${b ? `&lat=${b[0]}&lon=${b[1]}` : ''}&limit=5&lang=en`)).json();
+    let fs = (j.features || []).filter(f => !cc || (f.properties.countrycode || '').toLowerCase() === cc).map(f => ({ name: f.properties.name || name, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], kind: (f.properties.osm_value || '') + ' ' + (f.properties.osm_key || '') }));
+    if (b) fs.sort((x, y) => dist(b[0], b[1], x.lat, x.lon) - dist(b[0], b[1], y.lat, y.lon)); r = fs[0] || null } catch (e) { }
+  if (!r && b) try { const n = await nomQ(name, b[0], b[1], 1, 200); if (n[0]) r = { ...n[0], kind: '' } } catch (e) { }
   if (r) try { localStorage.setItem(k, JSON.stringify(r)) } catch (e) { } return r }
 /* ---------- refine ---------- */
 function itKind(x) { const s = (x.name + ' ' + (x.kind || '')).toLowerCase();
@@ -86,8 +90,8 @@ async function itRun() { const o = $('itOut'), f = $('itF').files[0]; let text =
   const items = parseItin(text); if (!items.length) { o.innerHTML = '<p class="muted">I couldn’t find places in that. Try one place per line, with “Day 1”, “Day 2”… headings.</p>'; return }
   const found = []; for (let i = 0; i < items.length; i++) { o.innerHTML = `<p class="muted">Finding places on the map… ${i + 1}/${items.length}</p>`; const g = await itinGeo(items[i].name); if (g) found.push({ ...items[i], lat: g.lat, lon: g.lon, kind: g.kind, name: items[i].name, k: '' }); else found.push({ ...items[i], miss: true }) }
   found.forEach(x => x.k = itKind(x)); IT.items = found;
-  const base = { lat: HOSTEL[0], lon: HOSTEL[1] }, byDay = {}; found.filter(x => !x.miss).forEach(x => (byDay[x.day] = byDay[x.day] || []).push(x));
-  const ref = {}; for (const d of Object.keys(byDay)) { o.innerHTML = `<p class="muted">Planning ${DAYS[d] || 'day'}…</p>`; const sug = await suggestFor(+d, byDay[d]); sug.forEach(s => s.k = itKind(s)); ref[d] = refineDay([...byDay[d], ...sug], base) }
+  const t0 = trip() || {}, okBase = !(t0.base && t0.cc && t0.base.cc && t0.base.cc !== t0.cc), base = okBase ? { lat: HOSTEL[0], lon: HOSTEL[1] } : null, byDay = {}; found.filter(x => !x.miss).forEach(x => (byDay[x.day] = byDay[x.day] || []).push(x));
+  const ref = {}; for (const d of Object.keys(byDay)) { o.innerHTML = `<p class="muted">Planning ${DAYS[d] || 'day'}…</p>`; const sug = await suggestFor(+d, byDay[d]); sug.forEach(s => s.k = itKind(s)); ref[d] = refineDay([...byDay[d], ...sug], base || byDay[d][0]) }
   IT.plan = ref; itShow() }
 function itShow() { const o = $('itOut'), miss = IT.items.filter(x => x.miss);
   const days = Object.keys(IT.plan).sort((a, b) => a - b); let added = 0, removed = 0, kept = 0;
