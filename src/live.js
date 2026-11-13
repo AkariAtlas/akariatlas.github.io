@@ -42,7 +42,7 @@ async function lvBus(p) { const f = await lvBusStops(p); if (!f) return ''; awai
 const YB_IOS = 'https://apps.apple.com/app/id1483423095', YB_AND = 'https://play.google.com/store/apps/details?id=tw.com.youbike.plus';
 function ybApp() { const ua = navigator.userAgent || '', ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1), and = /Android/.test(ua);
   const b = (u, l) => `<a class="pill" target="_blank" rel="noopener" href="${u}" style="text-decoration:none">${l}</a>`;
-  return `<div class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0">${ios ? b(YB_IOS, ' Get the YouBike app (App Store)') : and ? b(YB_AND, '▶ Get the YouBike app (Google Play)') : b(YB_IOS, ' App Store') + b(YB_AND, '▶ Google Play')}</div>` }
+  return `<div class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0">${ios ? b(YB_IOS, '🍎 Get the YouBike app (App Store)') : and ? b(YB_AND, '▶ Get the YouBike app (Google Play)') : b(YB_IOS, '🍎 App Store') + b(YB_AND, '▶ Google Play')}</div>` }
 /* 💳 How to pay — Taiwan transit for visitors (card network matters, not the bank) */
 function payTips(modes) { const home = (typeof HC === 'function' ? HC() : 'PHP'), ph = home === 'PHP';
   const T = { mrt: '🚇 <b>MRT</b>: tap a contactless <b>Visa, Mastercard, JCB, Discover or Diners</b> card, or Apple Pay / Google Pay, at the gate (since Jul 2026). Or use an EasyCard. Cash: buy a single-ride token at the machine.',
