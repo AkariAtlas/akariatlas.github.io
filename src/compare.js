@@ -3,11 +3,11 @@
    Whatever you apply is re-timed for travel and opening hours. */
 const CMP = { all: null, day: 0, L: {}, Rt: {} };
 async function cmpSuggestAll() { if (CMP.all) return CMP.all;
-  const keep = { routes: D.routes, stopx: D.stopx, notes: D.notes, autoPlanned: D.autoPlanned, manualStops: D.manualStops }, f = { save, renderPlan, toast }, rt = window.renderToday;
-  D.routes = JSON.parse(JSON.stringify(D.routes || {})); D.stopx = JSON.parse(JSON.stringify(D.stopx || {})); D.notes = JSON.parse(JSON.stringify(D.notes || {}));
-  save = () => { }; renderPlan = () => { }; toast = () => { }; window.renderToday = () => { };
+  /* plan on a private copy of the trip so the real plan is never touched; hold syncing until done */
+  const real = D, f = { save, renderPlan, toast }, rt = window.renderToday, held = typeof SYNC !== 'undefined' && !SYNC.busy; if (held) SYNC.busy = true;
+  D = JSON.parse(JSON.stringify(real)); save = () => { }; renderPlan = () => { }; toast = () => { }; window.renderToday = () => { };
   try { await autoPlanCore(true); CMP.all = { routes: D.routes, stopx: D.stopx, notes: D.notes } } catch (e) { CMP.all = { routes: {}, stopx: {}, notes: {} } }
-  finally { save = f.save; renderPlan = f.renderPlan; toast = f.toast; window.renderToday = rt; Object.assign(D, keep) } return CMP.all }
+  finally { D = real; save = f.save; renderPlan = f.renderPlan; toast = f.toast; window.renderToday = rt; if (held) { SYNC.busy = false; setTimeout(() => { try { syncNow(true) } catch (e) { } }, 500) } } return CMP.all }
 const cmpRow = (x, i, side) => `<div class="cmpRow"><span class="cmpN">${i + 1}</span><span class="cmpT">${esc(x.t || '')}</span><span class="cmpName">${esc(x.r[0])}</span>
   <span class="cmpB">${side === 'R' ? `<button title="Add to my plan" onclick="cmpAdd(${i})">←</button>` : ''}<button title="Up" onclick="cmpMv('${side}',${i},-1)">↑</button><button title="Down" onclick="cmpMv('${side}',${i},1)">↓</button><button title="Remove" onclick="cmpRm('${side}',${i})">✕</button></span></div>`;
 function cmpLoad(d) { CMP.day = d; const ex = k => (D.stopx || {})[d + ':' + k] || {}, sx = k => (CMP.all.stopx || {})[d + ':' + k] || {};
