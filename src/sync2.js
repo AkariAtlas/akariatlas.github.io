@@ -26,7 +26,13 @@ async function syncNow(fromSave) { if (!TRIP.code || localStorage.getItem('tw_st
   if (SYNC.busy) { SYNC.again = true; return } SYNC.busy = true;
   try { const j = await api({ action: 'load', code: TRIP.code, key: TRIP.key }); const r = JSON.parse(j.json || '{}'); markView(r);
     if (view || r.viewOnly) { if (sj(r) !== sj(syncBase())) { D = Object.assign({}, DEF, r); localStorage.setItem('tw_state', JSON.stringify(D)); setBase(r); renderAll() } setSync('👀 View only'); return }
-    const M = mergeWith(r), changedHere = sj(M) !== sj(D), changedThere = sj(M) !== sj(r);
+    /* safety: a device whose trip is missing (fresh install, cleared storage, failed load) must never wipe the shared copy */
+    const hasT = x => !!(x && x.trip && (x.trip.start || x.trip.base)), b0 = syncBase();
+    if (!hasT(D) && hasT(r)) { D = Object.assign({}, DEF, r); localStorage.setItem('tw_state', JSON.stringify(D)); setBase(r); try { renderAll() } catch (e) { } setSync('☁️ Synced'); return }
+    const M = mergeWith(r);
+    if (hasT(r) && !hasT(M)) { setSync('⚠️ Sync paused — trip missing here'); return }
+    if (hasT(b0) && !hasT(D) && !hasT(r)) { setSync('⚠️ Sync paused'); return }
+    const changedHere = sj(M) !== sj(D), changedThere = sj(M) !== sj(r);
     if (changedHere) { D = M; localStorage.setItem('tw_state', JSON.stringify(D)); try { renderAll() } catch (e) { } if (!fromSave) toast('Synced ✓') }
     if (changedThere) { await api({ action: 'save', code: TRIP.code, key: TRIP.key, json: JSON.stringify(D) }); try { pushView() } catch (e) { } setSync('☁️ Saved') } else setSync('☁️ Synced');
     setBase(D) }
