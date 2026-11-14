@@ -115,7 +115,7 @@ async function stayNear(day) { const t = trip(), r = D.routes[day], last = r[r.l
 on('plan:render', () => renderReturn());
 // include the ride home in the PDF
 (HOOKS['pdf:prepare'] = HOOKS['pdf:prepare'] || []).unshift(async function pdfRideHome() { const t = trip();
-  for (let d = 0; d < DAYS.length; d++) { const R0 = await returnLeg(d); if (!R0) continue; const l = R0.leg, how = l.mode === 'walk' ? `walk ${l.walk} min` : R0.useTaxi ? `taxi ${l.drive} min` : `MRT/bus ~${l.transit} min (taxi ${l.drive} min)`;
+  for (let d = 0; d < DAYS.length; d++) { const R0 = await returnLeg(d); if (!R0 || R0.bad || !R0.leg) continue; const l = R0.leg, how = l.mode === 'walk' ? `walk ${l.walk} min` : R0.useTaxi ? `taxi ${l.drive} min` : `MRT/bus ~${l.transit} min (taxi ${l.drive} min)`;
       D.routes[d].push([`Back to ${t.base.name} (${how})`, t.base.lat, t.base.lon, '']); D.stopx[d + ':' + (D.routes[d].length - 1)] = { time: fmtT(R0.home), fixed: 1 } } });
 
 /* place lookup with no distance limit (for "from" points in another city) + live suggestions */
