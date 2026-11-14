@@ -39,7 +39,7 @@ async function openCompare() { $('sheet').classList.add('on'); $('sheet').innerH
 /* ---------- "What do you like?" — build the suggested side from your interests ---------- */
 const CMP_LIKES = {
   cafe: ['☕ Cafés', ['cafe', 'coffee', 'dessert cafe'], 45],
-  hobby: ['🤖 Gundam & collectibles', ['Gundam Base', 'Animate', 'anime shop', 'toy store', 'figure shop', 'Taipei Underground Market'], 75],
+  hobby: ['🤖 Gundam & collectibles', ['Gundam Base', 'Animate', 'anime shop', 'toy store', 'figure shop', 'Taipei Underground Market', 'Bandai', 'hobby shop', 'game shop', 'card shop', 'comic store'], 75],
   clothes: ['👕 Cheap clothing', ['Wufenpu garment', 'clothing market', 'GU', 'Uniqlo', 'clothing store'], 75],
   novelty: ['🧸 Cheap novelty finds', ['Daiso', 'Don Don Donki', 'Miniso', 'night market', 'souvenir'], 60],
   view: ['🌄 Views & scenery', ['viewpoint', 'Elephant Mountain', 'riverside park', 'observation'], 75],
@@ -67,12 +67,12 @@ async function cmpByLikes() { const t = trip(), b = t.base, used = new Set(Objec
       const src = base0.routes[d] || [], fx = src.map((r, i) => [r, (base0.stopx || {})[d + ':' + i] || {}]).filter(([r]) => /airport|drop bags|check-?(in|out)|departure|arrival/i.test(r[0]));
       const tms = fx.map(([, e]) => itMin(e.time)).filter(x => x != null); if (first) { const s0 = Math.max(...tms, 600) + 60; slotsD = [itHm(s0), itHm(s0 + 150), '19:00']; cap = 3 } else { const e0 = Math.min(...tms, 900) - 30; slotsD = ['09:00', '10:30'].filter(t => itMin(t) < e0); cap = slotsD.length }
       if (first) fx.forEach(([r, e]) => { out.push(r.slice()); stopx[d + ':' + (out.length - 1)] = e }); anchor = first ? { lat: b.lat, lon: b.lon } : null;
-      const keep = out.length; for (let s = 0; s < cap && keys.length; s++) { const k = keys[(s + d) % keys.length], L = (pool[k] || []).slice().sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
-        const p = L.find(p => !used.has(p.name.toLowerCase()) && !/gondola/i.test(p.name) && dist(b.lat, b.lon, p.lat, p.lon) < 6); if (!p) continue; used.add(p.name.toLowerCase()); out.push([p.name, p.lat, p.lon, '']); stopx[d + ':' + (out.length - 1)] = { time: slotsD[out.length - 1 - keep] || '', note: CMP_LIKES[k][0] + ' · near your stay' } }
+      const keep = out.length; for (let s = 0; s < cap && keys.length; s++) { let k, p; for (let j = 0; j < keys.length && !p; j++) { k = keys[(s + d + j) % keys.length]; const L = (pool[k] || []).slice().sort((a, c) => dist(b.lat, b.lon, a.lat, a.lon) - dist(b.lat, b.lon, c.lat, c.lon));
+        p = L.find(p => !used.has(p.name.toLowerCase()) && !/gondola/i.test(p.name) && dist(b.lat, b.lon, p.lat, p.lon) < 8) } if (!p) continue; used.add(p.name.toLowerCase()); out.push([p.name, p.lat, p.lon, '']); stopx[d + ':' + (out.length - 1)] = { time: slotsD[out.length - 1 - keep] || '', note: CMP_LIKES[k][0] + ' · near your stay' } }
       if (last) fx.forEach(([r, e]) => { out.push(r.slice()); stopx[d + ':' + (out.length - 1)] = e });
       days[d] = out; notes[d] = (first ? '✨ Arrival day' : '✨ Departure day') + ' · near your stay · ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · '); return }
-    for (let s = 0; s < 5 && keys.length; s++) { const k = keys[(s + d) % keys.length], L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
-      const p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))); if (!p) continue; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
+    for (let s = 0; s < 5 && keys.length; s++) { let k, p; for (let j = 0; j < keys.length && !p; j++) { k = keys[(s + d + j) % keys.length]; const L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
+      p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))) } if (!p) continue; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
       stopx[d + ':' + (out.length - 1)] = { time: slots[out.length - 1], note: CMP_LIKES[k][0] + (CMP_PICK.pwd && PWD_DISC.test(p.name) ? ' · ♿ ask for the disability discount (bring your PWD ID)' : '') } }
     days[d] = out; notes[d] = '✨ ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · ') + (CMP_PICK.pwd ? ' · ♿ step-free picks' : '') });
   return { routes: days, stopx, notes } }
