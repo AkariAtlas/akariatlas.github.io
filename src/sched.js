@@ -4,7 +4,7 @@ const DUR = [[/airport.*arrival/i, 60], [/airport.*depart/i, 0], [/drop bags|che
   [/restaurant|kitchen|noodle|ramen|food|breakfast|dumpling|hot ?pot/i, 60], [/hot spring|onsen|spa/i, 120], [/zoo|aquarium|water park|theme/i, 150]];
 const visitMin = n => { for (const [r, m] of DUR) if (r.test(n)) return m; return 60 };
 const toMin = s => { const m = String(s || '').match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null };
-const fmtT = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}`;
+const fmtT = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}${m >= 1440 ? ' (+' + Math.floor(m / 1440) + 'd)' : ''}`;
 D.legs = D.legs || {};
 async function legInfo(a, b) { if (!D.legs) D.legs = {}; const k = [a[1], a[2], b[1], b[2]].map(x => (+x).toFixed(4)).join(','); if (D.legs[k]) return D.legs[k];
   const km0 = dist(a[1], a[2], b[1], b[2]); let walk = km0 * 1.3 / 4.8 * 60, drive = km0 * 1.35 / 22 * 60, km = km0 * 1.3;
@@ -85,11 +85,13 @@ async function dirSetFrom() { const q = $('dirQ').value.trim(); if (!q) return; 
 const LAST_TRAIN = { tw: 24 * 60, jp: 24 * 60 + 15, kr: 24 * 60 + 30, hk: 24 * 60 + 60, sg: 23 * 60 + 30 };
 async function returnLeg(day) { const t = trip(), r = D.routes[day] || []; if (!t?.base || !r.length) return null; const last = r[r.length - 1];
   if (/airport|check-?out|departure/i.test(last[0]) || dist(last[1], last[2], t.base.lat, t.base.lon) < .15) return null;
+  if (dist(last[1], last[2], t.base.lat, t.base.lon) > 300) return { bad: true, from: last, km: Math.round(dist(last[1], last[2], t.base.lat, t.base.lon)) };
   const S = await buildSched(day), leg = await legInfo(last, [t.base.name, t.base.lat, t.base.lon]); const startM = S.end, lastTrain = LAST_TRAIN[t.cc] || 23 * 60 + 30;
   const useTaxi = leg.mode !== 'walk' && startM + leg.transit > lastTrain; const mins = leg.mode === 'walk' ? leg.walk : useTaxi ? leg.drive : leg.transit, home = startM + mins;
   return { from: last, leg, startM, home, useTaxi, mins, late: home > 24 * 60 || mins > 90 } }
 async function renderReturn() { try { return await renderReturn0() } catch (e) { console.warn('return', e) } }
 async function renderReturn0() { const day = curDay, el = $('route'); if (!el) return; el.querySelector('.retLeg')?.remove(); const R0 = await returnLeg(day); if (!R0 || day !== curDay) return; const t = trip(), l = R0.leg, cur = sym(DC()).trim();
+  if (R0.bad) { el.insertAdjacentHTML('beforeend', `<div class="retLeg" style="margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--inbg);border:2px solid #E98B73"><b>📍 ${esc(t.base.name)} looks pinned in the wrong place</b> (${R0.km.toLocaleString()} km from your last stop), so the trip home can’t be worked out.<div class="row" style="gap:6px;margin-top:6px"><button class="act" onclick="fixBaseGeo().then(ok=>{toast(ok?'Stay location fixed ✓':'Couldn’t find it — set it in Trip → Trip settings');renderPlan()})">📍 Fix stay location</button></div></div>`); return }
   const how = l.mode === 'walk' ? `🚶 Walk ${l.walk} min (${l.km} km)` : R0.useTaxi ? `🚕 Taxi ${l.drive} min ≈${l.fare ? cur + l.fare.taxi : ''} (trains have stopped)` : `🚇 MRT/bus ~${l.transit} min${l.fare ? ' ≈' + cur + l.fare.transit : ''} · or 🚕 ${l.drive} min${l.fare ? ' ≈' + cur + l.fare.taxi : ''}`;
   const html = `<div class="retLeg" style="margin-top:10px;padding:10px 12px;border-radius:14px;background:var(--inbg);${R0.late ? 'border:2px solid #E98B73' : ''}">
    <div><b>🏨 Back to ${esc(t.base.name)}</b> · leave ${fmtT(R0.startM)} → arrive <b>${fmtT(R0.home)}</b></div><div class="muted" style="font-size:13px">${how}</div>

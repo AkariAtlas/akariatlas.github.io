@@ -1,6 +1,6 @@
 /* Akari Atlas · auto itinerary + background booking sync */
 // ---------- Auto-suggest itinerary from the trip's dates, base and budget ----------
-function planBar() { return `<div class="row" style="margin:6px 0 10px;gap:8px;flex-wrap:wrap"><button class="act" onclick="autoPlan(true)">✨ Suggest itinerary from my budget & dates</button><span class="muted" id="autoSt">${D.autoPlanned ? 'Auto-planned · edit anything.' : ''}</span></div>` }
+function planBar() { return `<div class="row" style="margin:6px 0 10px;gap:8px;flex-wrap:wrap"><button class="act" onclick="(Object.values(D.routes||{}).some(r=>r&&r.length)&&typeof openCompare==='function')?openCompare():autoPlan(true)">✨ Suggest itinerary from my budget & dates</button><span class="muted" id="autoSt">${D.autoPlanned ? 'Auto-planned · edit anything.' : ''}</span></div>` }
 on('plan:render', function planBarHook() { const r = $('route'); if (r && !document.getElementById('autoSt')) r.insertAdjacentHTML('afterbegin', planBar()) });
 
 // ---------- Keep bookings synced (one-tap Yes, no account picker after the first time) ----------
@@ -86,7 +86,9 @@ async function photonQ(q, lat, lon, n = 6) { let r = []; try { const c = new Abo
 const CC_BOX = { tw: [21.8, 119.3, 25.4, 122.1], jp: [24, 122.9, 45.6, 146], kr: [33, 124.5, 38.7, 130.9], ph: [4.5, 116.8, 21.2, 126.7], th: [5.6, 97.3, 20.5, 105.7], hk: [22.1, 113.8, 22.6, 114.5], sg: [1.2, 103.6, 1.5, 104.1] };
 async function fixBaseGeo() { const t = trip(); if (!t?.base) return false; const b = CC_BOX[t.cc]; if (!b) return false; const { lat, lon } = t.base;
   if (lat >= b[0] && lat <= b[2] && lon >= b[1] && lon <= b[3]) return false;
-  for (const q of [t.base.addrEn, t.base.addr, t.base.name + ' ' + (t.base.country || '')].filter(Boolean)) { try { const r = await (await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=${t.cc}`)).json();
-    if (r[0]) { t.base.lat = +r[0].lat; t.base.lon = +r[0].lon; save(); return true } } catch (e) { } } return false }
+  let cn = ''; try { cn = new Intl.DisplayNames(['en'], { type: 'region' }).of(t.cc.toUpperCase()) } catch (e) { }
+  const strip = a => String(a || '').replace(/\d+\s*樓.*$|\d+F\b.*$|,?\s*(floor|fl\.?)\s*\d+.*$/i, '').trim();
+  for (const q of [t.base.addrEn, strip(t.base.addr), t.base.addr, t.base.name + ' ' + cn, t.base.name].filter(Boolean)) { try { await new Promise(w => setTimeout(w, 1100)); const r = await (await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=${t.cc}`)).json();
+    if (r[0] && +r[0].lat >= b[0] && +r[0].lat <= b[2] && +r[0].lon >= b[1] && +r[0].lon <= b[3]) { Object.assign(t.base, { lat: +r[0].lat, lon: +r[0].lon, cc: t.cc, country: cn || t.base.country, cur: t.cur || t.base.cur }); D.legs = {}; save(); try { buildDays() } catch (e) { } return true } } catch (e) { } } return false }
 async function autoPlan(force) { const moved = await fixBaseGeo(); if (moved) { D.manualStops = 0; try { weather({ name: trip().base.name, lat: trip().base.lat, lon: trip().base.lon }, true) } catch (e) { } } return autoPlanCore(moved ? true : force) }
 setTimeout(async () => { if (await fixBaseGeo()) { toast('Fixed your stay location'); if (!D.manualStops) autoPlan(true) } }, 1500);

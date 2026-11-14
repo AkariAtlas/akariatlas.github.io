@@ -167,14 +167,31 @@ on('plan:render', () => { const bar = $('daySeg'); if (!bar || document.getEleme
 function dayX(d) { return (D.routes[d] || []).map((_, k) => (D.stopx || {})[d + ':' + k] || {}) }
 function setDayX(d, ex) { D.stopx = D.stopx || {}; Object.keys(D.stopx).filter(k => k.startsWith(d + ':')).forEach(k => delete D.stopx[k]); ex.forEach((e, k) => { if (e && Object.keys(e).length) D.stopx[d + ':' + k] = e }) }
 function autoTimeOn() { return localStorage.getItem('ak_autotime') !== '0' }
-function retimeDay(d) { const r = D.routes[d] || [], ex = dayX(d); if (!r.length) return;
-  let t = (ex[0].lock && itMin(ex[0].time) != null) ? itMin(ex[0].time) : (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570), prev = null;
-  r.forEach((x, k) => { const s = { name: x[0], lat: x[1], lon: x[2] }, kd = itKind(s); if (prev && x[1] != null && prev.lat != null) t += itTravel(prev, s);
-    if (ex[k].lock && itMin(ex[k].time) != null) t = itMin(ex[k].time); else if (/check-?out|departure|airport/i.test(x[0]) && ex[k].time) t = Math.max(t, itMin(ex[k].time) || t);
-    else { if (kd === 'night' && t < 1020) t = 1020; ex[k] = { ...ex[k], time: itHm(Math.round(t / 15) * 15) } }
-    t += /check|airport|departure|arrival/i.test(x[0]) ? 30 : IDUR[kd]; prev = s });
+/* typical opening hours when the place hasn't told us (used to avoid arriving before opening / after closing) */
+const OPEN_DEF = [[/night market|夜市/i, 1020, 1440], [/museum|gallery|memorial|palace|exhibition/i, 540, 1020], [/rail bike/i, 540, 1020], [/temple|shrine|church/i, 360, 1290],
+  [/cat village/i, 480, 1080], [/101|observatory|tower/i, 600, 1260], [/old street|market|mall|department|shop|street|plaza/i, 600, 1260], [/cafe|café|coffee|dessert/i, 540, 1260], [/restaurant|noodle|dumpling|din tai fung|food/i, 660, 1290]];
+function openOf(name, ex) { const h = ex && ex.hours && /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/.exec(ex.hours); if (h) return [+h[1] * 60 + +h[2], +h[3] * 60 + +h[4] || 1440];
+  for (const [r, o, c] of OPEN_DEF) if (r.test(name)) return [o, c]; return null }
+/* same travel + visit model as the day schedule, so the times you see and the schedule agree */
+async function retimeDay(d) { const r = D.routes[d] || [], ex = dayX(d); if (!r.length) return;
+  let t = (ex[0].lock && itMin(ex[0].time) != null) ? itMin(ex[0].time) : (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570);
+  for (let k = 0; k < r.length; k++) { const x = r[k]; if (k) { try { t += (await legInfo(r[k - 1], x)).mins } catch (e) { t += 30 } }
+    const fixedT = itMin(ex[k].time), isFixed = (ex[k].lock || ex[k].fixed || /check-?out|departure|airport/i.test(x[0])) && fixedT != null;
+    const o = openOf(x[0], ex[k]); let warn = '';
+    if (isFixed) t = Math.max(t, fixedT); else if (o && t < o[0]) t = o[0];
+    if (o && t > o[1] - 30) warn = 'may be closed by then';
+    ex[k] = { ...ex[k], time: isFixed ? ex[k].time : itHm(Math.round(t / 5) * 5), ...(warn ? { warn } : {}) }; if (!warn) delete ex[k].warn;
+    if (o && !ex[k].hours) ex[k].hours = itHm(o[0]) + '-' + (o[1] >= 1440 ? '24:00' : itHm(o[1]));
+    t += ex[k].dur ? +ex[k].dur : visitMin(x[0]) }
   setDayX(d, ex) }
-function afterEdit(msg, undo) { if (autoTimeOn()) retimeDay(curDay); save(); renderPlan(); if (undo) { window._undo = undo; const x = $('toast'); x.innerHTML = `${esc(msg)} · <button class="pill" style="min-height:28px;padding:2px 10px" onclick="_undo&&_undo();_undo=null;this.closest('#toast').classList.remove('on')">Undo</button>`; x.classList.add('on'); clearTimeout(window._ut); window._ut = setTimeout(() => x.classList.remove('on'), 5000) } else if (msg) toast(msg) }
+/* re-order a day so it's feasible: closes-early places first, night markets last, short hops in between; locked times stay */
+function smartOrder(d) { const r = D.routes[d] || [], ex = dayX(d); if (r.length < 3) return; const idx = r.map((x, i) => i), lockedAt = idx.filter(i => ex[i].lock || /airport|check-?(in|out)|departure|drop bags/i.test(r[i][0]));
+  const free = idx.filter(i => !lockedAt.includes(i)), night = free.filter(i => /night market|夜市/i.test(r[i][0])), early = free.filter(i => !night.includes(i) && (openOf(r[i][0], ex[i]) || [0, 1440])[1] <= 1080), rest = free.filter(i => !night.includes(i) && !early.includes(i));
+  const nn = (list, from) => { const out = [], pool = list.slice(); let cur = from; while (pool.length) { pool.sort((a, b) => dist(r[cur][1], r[cur][2], r[a][1], r[a][2]) - dist(r[cur][1], r[cur][2], r[b][1], r[b][2])); const n = pool.shift(); out.push(n); cur = n } return out };
+  const start = lockedAt.length && lockedAt[0] === 0 ? 0 : (early[0] ?? rest[0] ?? night[0]); const e1 = nn(early.filter(i => i !== start), start), last = e1.length ? e1[e1.length - 1] : start;
+  const order = [...(lockedAt[0] === 0 ? [0] : [start]), ...e1, ...nn(rest.filter(i => i !== start), last), ...night.filter(i => i !== start)]; lockedAt.filter(i => i !== 0).forEach(i => { order.splice(Math.min(i, order.length), 0, i) });
+  const seen = new Set(), fin = order.filter(i => !seen.has(i) && seen.add(i)); D.routes[d] = fin.map(i => r[i]); setDayX(d, fin.map(i => ex[i])) }
+async function afterEdit(msg, undo) { if (autoTimeOn()) await retimeDay(curDay); save(); renderPlan(); if (undo) { window._undo = undo; const x = $('toast'); x.innerHTML = `${esc(msg)} · <button class="pill" style="min-height:28px;padding:2px 10px" onclick="_undo&&_undo();_undo=null;this.closest('#toast').classList.remove('on')">Undo</button>`; x.classList.add('on'); clearTimeout(window._ut); window._ut = setTimeout(() => x.classList.remove('on'), 5000) } else if (msg) toast(msg) }
 mv = function (i, dir) { const r = D.routes[curDay], j = i + dir; if (j < 0 || j >= r.length) return; const ex = dayX(curDay), snap = JSON.stringify([r, ex]);
   [r[i], r[j]] = [r[j], r[i]]; [ex[i], ex[j]] = [ex[j], ex[i]]; if (ex[i]) delete ex[i].lock; if (ex[j]) delete ex[j].lock; setDayX(curDay, ex); D.manualStops = 1;
   afterEdit(autoTimeOn() ? 'Moved · times adjusted' : 'Moved', () => { const [a, b] = JSON.parse(snap); D.routes[curDay] = a; setDayX(curDay, b); save(); renderPlan() }) };
@@ -184,7 +201,7 @@ rm = function (i) { const r = D.routes[curDay], ex = dayX(curDay), snap = JSON.s
 saveStop = function (i) { D.manualStops = 1; const x = D.routes[curDay][i], k = curDay + ':' + i, old = (D.stopx || {})[k] || {}; x[0] = $('esN').value || x[0]; x[3] = $('esC').value; D.stopx = D.stopx || {};
   const tm = $('esT').value, lock = tm ? (tm !== old.time ? true : !!old.lock) : false;
   D.stopx[k] = { time: tm, ref: $('esR').value, note: $('esNo').value, ...(lock ? { lock: true } : {}) }; closeSheet(); afterEdit(lock && tm !== old.time ? 'Saved · 🔒 time kept, rest of day adjusted' : 'Saved ✓') };
-(function () { if (typeof addStopManual === 'function') { const a0 = addStopManual; addStopManual = async function () { const r = await a0.apply(this, arguments); if (autoTimeOn()) { retimeDay(curDay); save(); renderPlan() } return r } } })();
+(function () { if (typeof addStopManual === 'function') { const a0 = addStopManual; addStopManual = async function () { const r = await a0.apply(this, arguments); if (autoTimeOn()) { await retimeDay(curDay); save(); renderPlan() } return r } } })();
 on('plan:render', () => { const seg = $('daySeg'); if (!seg) return;
   document.querySelectorAll('#v-plan .tag').forEach(t => { const m = /🕒\s*(\d{1,2}:\d{2})/.exec(t.textContent); if (!m) return; const row = t.closest('.row'), btn = row && row.querySelector('[onclick^="editStop("]'); if (!btn) return; const i = +/editStop\((\d+)\)/.exec(btn.getAttribute('onclick'))[1]; if ((D.stopx || {})[curDay + ':' + i]?.lock && !t.dataset.l) { t.dataset.l = 1; t.textContent = '🔒 ' + m[1] } });
-  if (document.getElementById('atBar')) return; seg.insertAdjacentHTML('afterend', `<div id="atBar" class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><label style="display:inline-flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" style="width:18px;height:18px" ${autoTimeOn() ? 'checked' : ''} onchange="localStorage.setItem('ak_autotime',this.checked?'1':'0');if(this.checked){retimeDay(curDay);save();renderPlan()}"> ⏱ Auto-adjust times</label><button class="pill" style="min-height:32px" onclick="retimeDay(curDay);save();renderPlan();toast('Times re-planned ✓')">Re-plan this day's times</button><span class="muted" style="font-size:12px">🔒 = a time you set</span></div>`) });
+  if (document.getElementById('atBar')) return; seg.insertAdjacentHTML('afterend', `<div id="atBar" class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><label style="display:inline-flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" style="width:18px;height:18px" ${autoTimeOn() ? 'checked' : ''} onchange="localStorage.setItem('ak_autotime',this.checked?'1':'0');if(this.checked){retimeDay(curDay).then(()=>{save();renderPlan()})}"> ⏱ Auto-adjust times</label><button class="pill" style="min-height:32px" onclick="smartOrder(curDay);retimeDay(curDay).then(()=>{save();renderPlan();toast('Day re-arranged for travel & opening hours ✓')})">🧭 Re-arrange this day</button><span class="muted" style="font-size:12px">🔒 = a time you set</span></div>`) });
