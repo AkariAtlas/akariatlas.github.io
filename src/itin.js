@@ -174,11 +174,11 @@ function openOf(name, ex) { const h = ex && ex.hours && /(\d{1,2}):(\d{2})\s*-\s
   for (const [r, o, c] of OPEN_DEF) if (r.test(name)) return [o, c]; return null }
 /* same travel + visit model as the day schedule, so the times you see and the schedule agree */
 async function retimeDay(d) { const r = D.routes[d] || [], ex = dayX(d); if (!r.length) return;
-  let t = (ex[0].lock && itMin(ex[0].time) != null) ? itMin(ex[0].time) : (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570);
+  const f0 = (ex[0].lock || ex[0].fixed || /airport|arrival|check-?out|departure/i.test(r[0][0])) && itMin(ex[0].time) != null; let t = f0 ? itMin(ex[0].time) : (IT.pace === 'relaxed' ? 600 : IT.pace === 'packed' ? 510 : 570);
   for (let k = 0; k < r.length; k++) { const x = r[k]; if (k) { try { t += (await legInfo(r[k - 1], x)).mins } catch (e) { t += 30 } }
     const fixedT = itMin(ex[k].time), isFixed = (ex[k].lock || ex[k].fixed || /check-?out|departure|airport/i.test(x[0])) && fixedT != null;
     const o = openOf(x[0], ex[k]); let warn = '';
-    if (isFixed) t = Math.max(t, fixedT); else if (o && t < o[0]) t = o[0];
+    if (isFixed) t = k === 0 ? fixedT : Math.max(t, fixedT); else if (o && t < o[0]) t = o[0];
     if (o && t > o[1] - 30) warn = 'may be closed by then';
     ex[k] = { ...ex[k], time: isFixed ? ex[k].time : itHm(Math.round(t / 5) * 5), ...(warn ? { warn } : {}) }; if (!warn) delete ex[k].warn;
     if (o && !ex[k].hours) ex[k].hours = itHm(o[0]) + '-' + (o[1] >= 1440 ? '24:00' : itHm(o[1]));
