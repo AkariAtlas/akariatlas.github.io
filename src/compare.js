@@ -57,8 +57,10 @@ function cmpLike(k) { const i = CMP_PICK.likes.indexOf(k); i >= 0 ? CMP_PICK.lik
 async function cmpByLikes() { const t = trip(), b = t.base, used = new Set(Object.values(D.routes || {}).flat().map(r => (r[0] || '').toLowerCase())), pool = {};
   let fam = []; try { fam = await famousNear(b.lat, b.lon) } catch (e) { }
   await Promise.all(CMP_PICK.likes.map(async k => { const [, qs] = CMP_LIKES[k]; let arr = [];
+    if (k === 'hobby') { try { const q = `[out:json][timeout:15];nwr["shop"~"anime|games|toys|collector|model|hobby|video_games|comic"]["name"](around:9000,${b.lat},${b.lon});out center 60;`;
+      const r = await fetch(OVERPASS[0], { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: AbortSignal.timeout ? AbortSignal.timeout(16000) : undefined }); arr = ((await r.json()).elements || []).map(e => ({ name: e.tags['name:en'] || e.tags.name, lat: e.lat ?? e.center?.lat, lon: e.lon ?? e.center?.lon, kind: 'hobby ' + e.tags.shop })).filter(p => p.name && p.lat) } catch (e) { } }
     if (k === 'view') arr = fam.filter(p => /viewpoint|peak/.test(p.kind)); if (k === 'free') arr = fam.filter(p => /park|garden|temple|historic|street/.test(p.kind));
-    const rs = await Promise.all(qs.map(q => photonQ(q + ' ' + (b.city || ''), b.lat, b.lon, 6).catch(() => []))); rs.forEach(r => arr.push(...r.filter(p => !/hotel|hostel|entrance|wholesale|supply|tunnel|theatre|theater/i.test(p.name) && CMP_MATCH[k].test(p.name + ' ' + (p.kind || '')))));
+    const rs = await Promise.all(qs.map(q => photonQ(q + ' ' + (b.city || ''), b.lat, b.lon, 6).catch(() => []))); rs.forEach(r => arr.push(...r.filter(p => p.name.trim().split(/\s+/).length > 1 && !/[｜|]/.test(p.name) && !/hotel|hostel|entrance|wholesale|supply|tunnel|theatre|theater/i.test(p.name) && (CMP_MATCH[k].test(p.name + ' ' + (p.kind || ''))))));
     const seen = new Set(); pool[k] = arr.filter(p => p.name && dist(b.lat, b.lon, p.lat, p.lon) < 20 && !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()) && !(CMP_PICK.pwd && PWD_AVOID.test(p.name + ' ' + (p.kind || '')))) }));
   const days = {}, notes = {}, stopx = {}, slots = ['09:30', '11:30', '14:00', '16:30', '19:00'];
   const base0 = CMP.base || CMP.all;
@@ -71,8 +73,8 @@ async function cmpByLikes() { const t = trip(), b = t.base, used = new Set(Objec
         p = L.find(p => !used.has(p.name.toLowerCase()) && !/gondola/i.test(p.name) && dist(b.lat, b.lon, p.lat, p.lon) < 8) } if (!p) continue; used.add(p.name.toLowerCase()); out.push([p.name, p.lat, p.lon, '']); stopx[d + ':' + (out.length - 1)] = { time: slotsD[out.length - 1 - keep] || '', note: CMP_LIKES[k][0] + ' · near your stay' } }
       if (last) fx.forEach(([r, e]) => { out.push(r.slice()); stopx[d + ':' + (out.length - 1)] = e });
       days[d] = out; notes[d] = (first ? '✨ Arrival day' : '✨ Departure day') + ' · near your stay · ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · '); return }
-    for (let s = 0; s < 5 && keys.length; s++) { let k, p; for (let j = 0; j < keys.length && !p; j++) { k = keys[(s + d + j) % keys.length]; const L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
-      p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))) } if (!p) continue; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
+    const per = {}; for (let s = 0; s < 5 && keys.length; s++) { let k, p; for (let j = 0; j < keys.length && !p; j++) { k = keys[(s + d + j) % keys.length]; if ((per[k] || 0) >= 2) continue; const L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
+      p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))) } if (!p) continue; per[k] = (per[k] || 0) + 1; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
       stopx[d + ':' + (out.length - 1)] = { time: slots[out.length - 1], note: CMP_LIKES[k][0] + (CMP_PICK.pwd && PWD_DISC.test(p.name) ? ' · ♿ ask for the disability discount (bring your PWD ID)' : '') } }
     days[d] = out; notes[d] = '✨ ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · ') + (CMP_PICK.pwd ? ' · ♿ step-free picks' : '') });
   return { routes: days, stopx, notes } }
