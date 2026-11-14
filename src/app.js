@@ -89,10 +89,24 @@ let acTimer = null, acCtl = null;
 function onType() { clearTimeout(acTimer); const q = $('q').value.trim(); if (q.length < 2) { $('ac').innerHTML = ''; return } acTimer = setTimeout(() => autocomplete(q), 250) }
 const SEARCH = []; // ordered handlers: return true when they handled the query
 async function autocomplete(q) { for (const h of SEARCH) { try { if (await h(q)) return } catch (e) { console.error('search', e) } } return acPlaces(q) }
+/* place search follows your trip: results in the trip's country come first; other countries only if nothing matches there */
 async function acPlaces(q) {
+  const t = (typeof trip === 'function' && trip()) || {}, cc = (t.cc || '').toLowerCase(); let cn = ''; try { cn = cc ? new Intl.DisplayNames(['en'], { type: 'region' }).of(cc.toUpperCase()) : '' } catch (e) { }
+  const bias = curPlace || (t.base && t.base.lat ? { lat: t.base.lat, lon: t.base.lon } : { lat: HOSTEL[0], lon: HOSTEL[1] });
+  const qq = cn ? q.replace(new RegExp('\\b' + cn + '\\b', 'i'), '').replace(/\s{2,}/g, ' ').trim() || q : q;
+  const row = (name, la, lo, sub, typ) => `<button class="acItem" onclick='pickPlace(${JSON.stringify({ name, lat: la, lon: lo, sub }).replace(/'/g, "&#39;")})'>📍 <b>${esc(name)}</b> <span class="muted">${esc(sub || typ || '')}</span></button>`;
   try { acCtl && acCtl.abort(); acCtl = new AbortController();
-    const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=7&lang=en&lat=${(curPlace||{lat:HOSTEL[0]}).lat}&lon=${(curPlace||{lon:HOSTEL[1]}).lon}`, { signal: acCtl.signal })).json();
-    const seenAc = new Set(); j.features = j.features.filter(f => { const p = f.properties, k = (p.name + '|' + (p.city || p.county || '') + '|' + (p.type || '')).toLowerCase(); if (seenAc.has(k)) return false; seenAc.add(k); return true }); $('ac').innerHTML = j.features.map(f => { const p = f.properties, [lo, la] = f.geometry.coordinates; const sub = [p.street, p.city || p.county, p.country].filter(Boolean).filter(x => x !== p.name).join(', '); return `<button class="acItem" onclick='pickPlace(${JSON.stringify({ name: p.name, lat: la, lon: lo, sub }).replace(/'/g, "&#39;")})'>📍 <b>${esc(p.name)}</b> <span class="muted">${esc(sub || p.type || '')}</span></button>` }).join('') || '<div class="muted" style="padding:8px">No matches</div>';
+    const j = await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(qq)}&limit=15&lang=en&lat=${bias.lat}&lon=${bias.lon}`, { signal: acCtl.signal })).json();
+    const seenAc = new Set(); const all = (j.features || []).filter(f => { const p = f.properties, k = (p.name + '|' + (p.city || p.county || '') + '|' + (p.type || '')).toLowerCase(); if (seenAc.has(k)) return false; seenAc.add(k); return true });
+    const otherCountry = cc && /\b(japan|korea|china|hong kong|usa|united states|germany|france|thailand|singapore|philippines|vietnam|malaysia)\b/i.test(q) && !new RegExp(cn, 'i').test(q);
+    let home = cc && !otherCountry ? all.filter(f => (f.properties.countrycode || '').toLowerCase() === cc) : all, away = cc && !otherCountry ? all.filter(f => (f.properties.countrycode || '').toLowerCase() !== cc) : [];
+    let homeHtml = home.slice(0, 7).map(f => { const p = f.properties, [lo, la] = f.geometry.coordinates; return row(p.name, la, lo, [p.street, p.city || p.county].filter(Boolean).filter(x => x !== p.name).join(', '), p.type) }).join('');
+    if (!home.length && cc && !otherCountry) { try { const n = await (await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(qq)}&format=jsonv2&limit=6&accept-language=en&countrycodes=${cc}`, { signal: acCtl.signal })).json();
+      homeHtml = n.map(r => row(r.name || r.display_name.split(',')[0], +r.lat, +r.lon, r.display_name.split(',').slice(1, 3).join(',').trim(), r.type)).join('') } catch (e) { if (e.name === 'AbortError') return } }
+    const gq = encodeURIComponent(qq + ' ' + (t.base?.city || cn || '')), noneHome = cc && !otherCountry && !homeHtml;
+    $('ac').innerHTML = (noneHome ? `<div class="muted" style="padding:8px 10px">Nothing called “${esc(qq)}” on the free map in ${esc(cn || 'your trip country')}. <a href="https://www.google.com/maps/search/${gq}" target="_blank" rel="noopener">🔎 Search Google Maps in ${esc(cn)}</a></div>` : homeHtml)
+      + (away.length && (noneHome || home.length < 3) ? `<div class="muted" style="padding:6px 10px;font-size:12px">${noneHome ? 'Elsewhere in the world:' : 'Also elsewhere:'}</div>` + away.slice(0, noneHome ? 5 : 3).map(f => { const p = f.properties, [lo, la] = f.geometry.coordinates; return row(p.name, la, lo, [p.city || p.county, p.country].filter(Boolean).join(', '), p.type) }).join('') : '')
+      || '<div class="muted" style="padding:8px">No matches</div>';
   } catch (e) { if (e.name === 'AbortError') return; $('ac').innerHTML = '<div class="muted" style="padding:8px">Search needs internet</div>' }
   await acFallback(q) }
 let curPlace = null, nearCat = 'cafe', nearData = [];
