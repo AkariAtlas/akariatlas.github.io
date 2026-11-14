@@ -13,13 +13,13 @@ async function legInfo(a, b) { if (!D.legs) D.legs = {}; const k = [a[1], a[2], 
   const transit = km0 < 1 ? walk : Math.max(drive * 1.6, 15) + 8; // MRT/bus incl. walk & wait
   const mode = walk <= 20 ? 'walk' : 'transit', mins = Math.round(mode === 'walk' ? walk : transit);
   const fare = DC() === 'TWD' ? { taxi: Math.round(85 + Math.max(0, km - 1.25) * 25), transit: Math.round(20 + km * 1.5) } : null;
-  return D.legs[k] = { km: +km.toFixed(1), walk: Math.round(walk), drive: Math.round(drive), transit: Math.round(transit), mode, mins, fare } }
+  if (!D.legs) D.legs = {}; return D.legs[k] = { km: +km.toFixed(1), walk: Math.round(walk), drive: Math.round(drive), transit: Math.round(transit), mode, mins, fare } }
 function hoursOk(h, t) { if (!h) return null; if (/24\/7/.test(h)) return true; const rs = [...String(h).matchAll(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/g)]; if (!rs.length) return null;
   return rs.some(r => { const a = +r[1] * 60 + +r[2], b = +r[3] * 60 + +r[4]; return b > a ? t >= a && t <= b : t >= a || t <= b }) }
 const costNum = s => { const m = String(s || '').replace(/,/g, '').match(/(\d+(\.\d+)?)/); return m ? +m[1] : 0 };
 async function buildSched(day) { const r = D.routes[day] || [], out = []; let clock = null, transport = 0;
   for (let i = 0; i < r.length; i++) { const ex = (D.stopx || {})[day + ':' + i] || {}; let leg = null;
-    if (i) { leg = await legInfo(r[i - 1], r[i]); clock += leg.mins; if (leg.fare && leg.mode !== 'walk') transport += leg.fare.transit }
+    if (i) { try { leg = await legInfo(r[i - 1], r[i]) } catch (e) { leg = null } if (!leg || !isFinite(leg.mins)) { const km = dist(r[i - 1][1], r[i - 1][2], r[i][1], r[i][2]) || 1; leg = { km, walk: Math.round(km * 16), drive: Math.round(km * 3), transit: Math.round(km * 3 + 15), mode: km < 1.2 ? 'walk' : 'transit', mins: Math.round(km < 1.2 ? km * 16 : km * 3 + 15), fare: null } } clock += leg.mins; if (leg.fare && leg.mode !== 'walk') transport += leg.fare.transit }
     const set = toMin(ex.time); if (clock == null) clock = set ?? 9 * 60; let wait = 0; if (set != null && set > clock) { wait = set - clock; clock = set }
     const late = set != null && clock > set + 10 ? clock - set : 0, arr = clock, stay = ex.dur ? +ex.dur : visitMin(r[i][0]); clock += stay;
     out.push({ arr, dep: clock, stay, leg, wait, late, open: hoursOk(ex.hours, arr) }) }
