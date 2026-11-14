@@ -76,6 +76,8 @@ async function cmpByLikes() { const t = trip(), b = t.base, used = new Set(Objec
     const per = {}; for (let s = 0; s < 5 && keys.length; s++) { let k, p; for (let j = 0; j < keys.length && !p; j++) { k = keys[(s + d + j) % keys.length]; if ((per[k] || 0) >= 2) continue; const L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
       p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))) } if (!p) continue; per[k] = (per[k] || 0) + 1; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
       stopx[d + ':' + (out.length - 1)] = { time: slots[out.length - 1], note: CMP_LIKES[k][0] + (CMP_PICK.pwd && PWD_DISC.test(p.name) ? ' · ♿ ask for the disability discount (bring your PWD ID)' : '') } }
+    const ix = out.map((_, i) => i).sort((a, c) => (/night market/i.test(out[a][0]) ? 1 : 0) - (/night market/i.test(out[c][0]) ? 1 : 0) || a - c), ex2 = ix.map(i => stopx[d + ':' + i]);
+    const o2 = ix.map(i => out[i]); out.length = 0; out.push(...o2); ex2.forEach((e, i) => stopx[d + ':' + i] = { ...e, time: /night market/i.test(out[i][0]) ? (i === out.length - 1 ? '19:00' : slots[i]) : slots[i] });
     days[d] = out; notes[d] = '✨ ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · ') + (CMP_PICK.pwd ? ' · ♿ step-free picks' : '') });
   return { routes: days, stopx, notes } }
 async function cmpRebuild() { const el = $('cmpBody'); if (el) el.insertAdjacentHTML('afterbegin', '<p class="muted" id="cmpBusy">Finding places you’ll like…</p>');
