@@ -61,8 +61,16 @@ async function cmpByLikes() { const t = trip(), b = t.base, used = new Set(Objec
     const rs = await Promise.all(qs.map(q => photonQ(q + ' ' + (b.city || ''), b.lat, b.lon, 6).catch(() => []))); rs.forEach(r => arr.push(...r.filter(p => !/hotel|hostel|entrance|wholesale|supply|tunnel|theatre|theater/i.test(p.name) && CMP_MATCH[k].test(p.name + ' ' + (p.kind || '')))));
     const seen = new Set(); pool[k] = arr.filter(p => p.name && dist(b.lat, b.lon, p.lat, p.lon) < 20 && !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()) && !(CMP_PICK.pwd && PWD_AVOID.test(p.name + ' ' + (p.kind || '')))) }));
   const days = {}, notes = {}, stopx = {}, slots = ['09:30', '11:30', '14:00', '16:30', '19:00'];
-  DAYS.forEach((_, d) => { const first = d === 0, last = d === DAYS.length - 1; if (first || last) { days[d] = (CMP.all.routes[d] || []).slice(); (days[d] || []).forEach((_, i) => stopx[d + ':' + i] = (CMP.all.stopx || {})[d + ':' + i] || {}); notes[d] = (CMP.all.notes || {})[d] || ''; return }
-    const keys = CMP_PICK.likes.slice(); const out = []; let anchor = null;
+  const base0 = CMP.base || CMP.all;
+  DAYS.forEach((_, d) => { const first = d === 0, last = d === DAYS.length - 1, keys = CMP_PICK.likes.slice(), out = []; let anchor = null, cap = 5, slotsD = slots;
+    if (first || last) { /* arrival / departure: keep the airport, bag drop and check-out stops; fill the free time with your picks */
+      const src = base0.routes[d] || [], fx = src.map((r, i) => [r, (base0.stopx || {})[d + ':' + i] || {}]).filter(([r]) => /airport|drop bags|check-?(in|out)|departure|arrival/i.test(r[0]));
+      const tms = fx.map(([, e]) => itMin(e.time)).filter(x => x != null); if (first) { const s0 = Math.max(...tms, 600) + 60; slotsD = [itHm(s0), itHm(s0 + 150), '19:00']; cap = 3 } else { const e0 = Math.min(...tms, 900) - 30; slotsD = ['09:00', '10:30'].filter(t => itMin(t) < e0); cap = slotsD.length }
+      if (first) fx.forEach(([r, e]) => { out.push(r.slice()); stopx[d + ':' + (out.length - 1)] = e }); anchor = first ? { lat: b.lat, lon: b.lon } : null;
+      const keep = out.length; for (let s = 0; s < cap && keys.length; s++) { const k = keys[(s + d) % keys.length], L = (pool[k] || []).slice().sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
+        const p = L.find(p => !used.has(p.name.toLowerCase()) && !/gondola/i.test(p.name) && dist(b.lat, b.lon, p.lat, p.lon) < 6); if (!p) continue; used.add(p.name.toLowerCase()); out.push([p.name, p.lat, p.lon, '']); stopx[d + ':' + (out.length - 1)] = { time: slotsD[out.length - 1 - keep] || '', note: CMP_LIKES[k][0] + ' · near your stay' } }
+      if (last) fx.forEach(([r, e]) => { out.push(r.slice()); stopx[d + ':' + (out.length - 1)] = e });
+      days[d] = out; notes[d] = (first ? '✨ Arrival day' : '✨ Departure day') + ' · near your stay · ' + CMP_PICK.likes.map(k => CMP_LIKES[k][0]).join(' · '); return }
     for (let s = 0; s < 5 && keys.length; s++) { const k = keys[(s + d) % keys.length], L = pool[k] || []; L.sort((a, c) => dist((anchor || b).lat, (anchor || b).lon, a.lat, a.lon) - dist((anchor || b).lat, (anchor || b).lon, c.lat, c.lon));
       const p = L.find(p => !used.has(p.name.toLowerCase()) && !(/gondola/i.test(p.name) && used.has('#gondola'))); if (!p) continue; used.add(p.name.toLowerCase()); if (/gondola/i.test(p.name)) used.add('#gondola'); if (!anchor) anchor = p; out.push([p.name, p.lat, p.lon, '']);
       stopx[d + ':' + (out.length - 1)] = { time: slots[out.length - 1], note: CMP_LIKES[k][0] + (CMP_PICK.pwd && PWD_DISC.test(p.name) ? ' · ♿ ask for the disability discount (bring your PWD ID)' : '') } }
