@@ -29,6 +29,8 @@ async function syncNow(fromSave) { if (!TRIP.code || localStorage.getItem('tw_st
     /* safety: a device whose trip is missing (fresh install, cleared storage, failed load) must never wipe the shared copy */
     const hasT = x => !!(x && x.trip && (x.trip.start || x.trip.base)), b0 = syncBase();
     if (!hasT(D) && hasT(r)) { D = Object.assign({}, DEF, r); localStorage.setItem('tw_state', JSON.stringify(D)); setBase(r); try { renderAll() } catch (e) { } setSync('☁️ Synced'); return }
+    /* the shared copy lost its trip but this device still has it: restore the cloud from here instead of wiping this device */
+    if (hasT(D) && !hasT(r)) { D.t = Date.now(); await api({ action: 'save', code: TRIP.code, key: TRIP.key, json: JSON.stringify(D) }); setBase(D); setSync('☁️ Restored the shared trip from this device'); toast('Shared trip restored from this device ✓'); return }
     const M = mergeWith(r);
     if (hasT(r) && !hasT(M)) { setSync('⚠️ Sync paused — trip missing here'); return }
     if (hasT(b0) && !hasT(D) && !hasT(r)) { setSync('⚠️ Sync paused'); return }
