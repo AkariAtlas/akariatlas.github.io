@@ -39,7 +39,7 @@
   let t = 0;
   window.startTour = function () { closeSettings?.(); t = 0; document.getElementById('akTour')?.remove(); const d = document.createElement('div'); d.id = 'akTour'; d.innerHTML = '<div class="hole"></div><div class="tip"></div>'; document.body.appendChild(d); step() };
   function step() { const d = document.getElementById('akTour'); if (!d) return; const [sel, h, p] = TOUR[t], el = document.querySelector(sel);
-    if (sel === '.mxTools' && !el) { try { goTab('money') } catch (e) { } return setTimeout(step, 600) } if (sel === '#talkFab') { try { goTab('today') } catch (e) { } } if (!el) { t++; return t < TOUR.length ? step() : endTour() } const r = el.getBoundingClientRect(), hole = d.querySelector('.hole'), tip = d.querySelector('.tip'), pad = 6;
+    if (sel === '.mxTools' && !el && !step._w) { step._w = 1; try { goTab('money') } catch (e) { } return setTimeout(step, 600) } if (sel === '#talkFab') { try { goTab('today') } catch (e) { } } if (!el) { t++; return t < TOUR.length ? step() : endTour() } const r = el.getBoundingClientRect(), hole = d.querySelector('.hole'), tip = d.querySelector('.tip'), pad = 6;
     Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
     const below = r.top < innerHeight / 2; tip.style.top = below ? (r.bottom + 14) + 'px' : ''; tip.style.bottom = below ? '' : (innerHeight - r.top + 14) + 'px';
     tip.innerHTML = `<h3>${h}</h3><div>${p}</div><div class="b"><button class="s" onclick="endTour()">Skip tour</button><span class="muted" style="font-size:12px">${t + 1} / ${TOUR.length}</span><button class="n" onclick="tourNext()">${t === TOUR.length - 1 ? 'Done 🎉' : 'Next'}</button></div>` }
