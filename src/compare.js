@@ -92,14 +92,13 @@ async function cmpRebuild() { const el = $('cmpBody'); if (el) el.insertAdjacent
 
 /* keep arrival/stay/departure anchors on first & last day (repairs plans where a suggestion pushed them out) */
 async function ensureAnchors(quiet) { const t = trip(); if (!t?.base || !DAYS.length || typeof nearestAirport !== 'function') return; let ch = 0;
-  const ap = await nearestAirport(t).catch(() => null), hm = (h, m) => String(((h % 24) + 24) % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  const ap = await nearestAirport(t).catch(() => null), hm = (h, m) => { const t2 = (((h * 60 + m) % 1440) + 1440) % 1440; return String(Math.floor(t2 / 60)).padStart(2, '0') + ':' + String(t2 % 60).padStart(2, '0') };
   const fix = (d, want) => { const r = (D.routes[d] = D.routes[d] || []), ex = dayX(d); let k = 0;
     want.forEach(([re, row, x, atEnd]) => { if (r.some(s => re.test(s[0]))) return; ex.forEach(e => { if (e.note && x.note && e.note === x.note) delete e.note });
       if (atEnd) { r.push(row); ex.push(x) } else { r.splice(k, 0, row); ex.splice(k, 0, x); k++ } ch = 1 });
     if (ch) setDayX(d, ex) };
   const arr = typeof flightTime === 'function' ? flightTime(t.out) : null, dep = typeof flightTime === 'function' ? flightTime(t.back) : null;
-  if (ap && t.out) fix(0, [[/\(arrival\)|airport/i, [ap.name + ' (arrival)', ap.lat, ap.lon, ''], { time: arr ? hm(arr[0] + 2, arr[1] + 20) : '', note: 'Land, immigration & SIM. ' + t.out, lock: 1 }]]);
-  fix(0, [[/drop bags|check-?in/i, [t.base.name + ' (drop bags)', t.base.lat, t.base.lon, ''], { time: arr ? hm(arr[0] + 4, 0) : '', note: 'Check-in or leave luggage at your stay', lock: 1 }]]);
+  fix(0, [...(ap && t.out ? [[/\(arrival\)|airport/i, [ap.name + ' (arrival)', ap.lat, ap.lon, ''], { time: arr ? hm(arr[0] + 2, arr[1] + 20) : '', note: 'Land, immigration & SIM. ' + t.out, lock: 1 }]] : []), [/drop bags|check-?in/i, [t.base.name + ' (drop bags)', t.base.lat, t.base.lon, ''], { time: arr ? hm(arr[0] + 4, 0) : '', note: 'Check-in or leave luggage at your stay', lock: 1 }]]);
   const L = DAYS.length - 1; if (ap && t.back && L > 0) fix(L, [[/\(departure\)/i, [ap.name + ' (departure)', ap.lat, ap.lon, ''], { time: dep ? hm(dep[0] - 3, dep[1]) : '', note: 'Be at the airport ~3 h before. ' + t.back, lock: 1 }, 1]]);
   if (ch) { try { await retimeDay(0) } catch (e) { } save(); try { renderPlan() } catch (e) { } if (!quiet) toast('Arrival, stay and departure restored ✓') } }
 setTimeout(() => { if (localStorage.getItem('ak_viewonly') !== '1') ensureAnchors() }, 6000);
