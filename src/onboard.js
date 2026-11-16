@@ -28,16 +28,18 @@
   window.welcomeDone = how => { localStorage.setItem('ak_welcomed', '1'); document.getElementById('akOn')?.remove(); if (how === 'trip') { try { openWizard() } catch (e) { } } if (how === 'tour') setTimeout(startTour, 300); if (how === 'join') { try { openWizard(); setTimeout(() => document.getElementById('wizJoin')?.focus(), 200) } catch (e) { } } };
 
   /* guided tour over the real UI */
-  const TOUR = [['[data-v="today"]', '🏠 Today', 'What’s next, your leave-by time, today’s spending, weather and quick trip tools.'],
-    ['[data-v="explore"]', '🔍 Explore', 'Search anything: “cafe near me”, a full address, or “where to buy 24k gold around Ximending”. Get directions, ♡ Save places, 🎫 Book a tour, and find restrooms and ATMs.'],
-    ['[data-v="plan"]', '🗺️ Plan', 'Your day-by-day schedule with real travel times and the ride home. Tap ✨ to auto-plan and 📄 for the immigration PDF.'],
-    ['[data-v="money"]', '🎟️ Wallet', 'Tickets that open offline, ♡ saved places, free-cancellation alerts, plus budget and who-owes-whom. Docs, packing and settings are at the bottom.'],
+  const TOUR = [['[data-v="today"]', '🏠 Today', 'What’s next and when to leave, your ticket, today’s spending and weather. During the trip it opens here with your next stop on top.'],
+    ['[data-v="plan"]', '🗺️ Plan', 'Your day-by-day schedule with real travel times and the ride home. ✨ Suggest, 📥 Import or drag ⠿ to re-order. Big changes show ↩️ Undo for 30 seconds. On rainy days you get indoor swaps.'],
+    ['[data-v="explore"]', '🔍 Explore', 'Search anything: “cafe near me”, an address or a shop like SynTrend. Get directions and live MRT/bus/YouBike, ♡ Save places, or 🎫 Book a tour.'],
+    ['[data-v="money"]', '🎟️ Wallet', 'Tickets that open offline, ♡ saved places, free-cancellation alerts, 💳 EasyCard balance, budget with 📷 receipt scan, and who-owes-whom.'],
+    ['.mxTools', '🛟 Safety tools', '📴 Offline check before you fly, 🛟 daily backups you can restore, and 📔 Memories, a shareable recap of your trip.'],
     ['#talkFab', '🗣️ Translator', 'Tap to talk with anyone: speak, show the big translation, and hear their reply in English.'],
-    ['#setBtn', '⚙️ Settings', 'Import bookings, switch trips, sync with your partner, and replay this tour any time.']];
+    ['#sync', '☁️ Sync', 'Shows “✓ Up to date” when you and your companion see the same plan. Tap it if it says Not synced.'],
+    ['#setBtn', '⚙️ Settings', 'Import bookings, switch trips, share by QR or 4-digit code, and replay this tour any time.']];
   let t = 0;
   window.startTour = function () { closeSettings?.(); t = 0; document.getElementById('akTour')?.remove(); const d = document.createElement('div'); d.id = 'akTour'; d.innerHTML = '<div class="hole"></div><div class="tip"></div>'; document.body.appendChild(d); step() };
   function step() { const d = document.getElementById('akTour'); if (!d) return; const [sel, h, p] = TOUR[t], el = document.querySelector(sel);
-    if (!el) { t++; return t < TOUR.length ? step() : endTour() } const r = el.getBoundingClientRect(), hole = d.querySelector('.hole'), tip = d.querySelector('.tip'), pad = 6;
+    if (sel === '.mxTools' && !el) { try { goTab('money') } catch (e) { } return setTimeout(step, 600) } if (sel === '#talkFab') { try { goTab('today') } catch (e) { } } if (!el) { t++; return t < TOUR.length ? step() : endTour() } const r = el.getBoundingClientRect(), hole = d.querySelector('.hole'), tip = d.querySelector('.tip'), pad = 6;
     Object.assign(hole.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
     const below = r.top < innerHeight / 2; tip.style.top = below ? (r.bottom + 14) + 'px' : ''; tip.style.bottom = below ? '' : (innerHeight - r.top + 14) + 'px';
     tip.innerHTML = `<h3>${h}</h3><div>${p}</div><div class="b"><button class="s" onclick="endTour()">Skip tour</button><span class="muted" style="font-size:12px">${t + 1} / ${TOUR.length}</span><button class="n" onclick="tourNext()">${t === TOUR.length - 1 ? 'Done 🎉' : 'Next'}</button></div>` }
