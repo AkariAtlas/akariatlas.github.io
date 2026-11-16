@@ -25,9 +25,12 @@ function cmpRm(s, i) { (s === 'L' ? CMP.L : CMP.Rt)[CMP.day].splice(i, 1); cmpDr
 function cmpAdd(i) { const x = CMP.Rt[CMP.day][i], L = CMP.L[CMP.day]; if (!L.some(y => y.r[0] === x.r[0])) L.push({ r: x.r.slice(), x: { note: x.x.note || '' }, t: '' }); cmpDraw() }
 async function cmpApply(which) { const d = CMP.day, L = CMP.L[d], R = CMP.Rt[d];
   const list = which === 'L' ? L : which === 'R' ? R : [...L, ...R.filter(x => !L.some(y => y.r[0].toLowerCase() === x.r[0].toLowerCase()))];
+  const isAnc = x => { const b = (trip()?.base?.name || '#').toLowerCase().split(' ')[0]; return /airport|arrival|immigration|drop bags|check-?in|check-?out|depart/i.test(x.r[0] + ' ' + (x.x.note || '')) || x.r[0].toLowerCase().includes(b) };
+  const anc = L.filter(isAnc), early = anc.filter(x => !/check-?out|depart/i.test(x.r[0] + ' ' + (x.x.note || ''))), late = anc.filter(x => !early.includes(x)), nm = x => x.r[0].toLowerCase();
+  const mid = list.filter(x => !anc.some(a => nm(a) === nm(x)) && !isAnc(x)); list.length = 0; list.push(...early, ...mid, ...late); CMP.anc = early.length;
   D.routes[d] = list.map(x => x.r.slice()); setDayX(d, list.map(x => ({ ...x.x }))); D.manualStops = 1; if (which !== 'L') { D.notes = D.notes || {}; if ((CMP.all.notes || {})[d]) D.notes = D.notes || {}; D.notes[d] = CMP.all.notes[d] }
   $('cmpBody').insertAdjacentHTML('afterbegin', '<p class="muted">Arranging for travel & opening hours…</p>');
-  if (which !== 'L') smartOrder(d); await retimeDay(d); save(); curDay = d; renderPlan(); CMP.L[d] = null; CMP.Rt[d] = null; cmpLoad(d); cmpDraw(); toast(`${DAYS[d]} updated ✓`) }
+  if (which !== 'L') smartOrder(d); await retimeDay(d); save(); curDay = d; renderPlan(); CMP.L[d] = null; CMP.Rt[d] = null; cmpLoad(d); cmpDraw(); toast(`${DAYS[d]} updated ✓`); ensureAnchors(1) }
 async function cmpAllDays() { for (const d of Object.keys(CMP.all.routes)) { D.routes[d] = CMP.all.routes[d]; Object.keys(D.stopx || {}).filter(k => k.startsWith(d + ':')).forEach(k => delete D.stopx[k]); (CMP.all.routes[d] || []).forEach((_, k) => { const e = CMP.all.stopx[d + ':' + k]; if (e) D.stopx[d + ':' + k] = e }); D.notes = D.notes || {}; D.notes[d] = CMP.all.notes[d] }
   D.autoPlanned = Date.now(); save(); renderPlan(); closeSheet(); toast('Whole trip planned ✨') }
 async function openCompare() { $('sheet').classList.add('on'); $('sheet').innerHTML = `<div class="sheetIn cmpSheet"><div class="row sp"><h3 style="margin:0">✨ Suggest itinerary</h3><button class="pill" onclick="closeSheet()">✕</button></div><div id="cmpBody"><p class="muted">Building a suggestion from your budget, dates, stay and likes…</p></div></div>`;
@@ -86,3 +89,17 @@ async function cmpRebuild() { const el = $('cmpBody'); if (el) el.insertAdjacent
   if (CMP_PICK.pwd) document.querySelectorAll('#cmpBody .cmpCol.sug .cmpName').forEach(n => { if (PWD_DISC.test(n.textContent) && !n.dataset.p) { n.dataset.p = 1; n.insertAdjacentHTML('beforeend', ' <span title="Disability discount often available">♿</span>') } }) };
   const o0 = openCompare; openCompare = async function () { CMP.base = null; await o0.apply(this, arguments); if (CMP_PICK.likes.length) await cmpRebuild() } })();
 (function () { const st = document.createElement('style'); st.textContent = '.cmpLikes{background:rgba(231,189,104,.15);border-radius:14px;padding:10px;margin:0 0 12px}.cmpLikes .pill{min-height:34px}'; document.head.appendChild(st) })();
+
+/* keep arrival/stay/departure anchors on first & last day (repairs plans where a suggestion pushed them out) */
+async function ensureAnchors(quiet) { const t = trip(); if (!t?.base || !DAYS.length || typeof nearestAirport !== 'function') return; let ch = 0;
+  const ap = await nearestAirport(t).catch(() => null), hm = (h, m) => String(((h % 24) + 24) % 24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  const fix = (d, want) => { const r = (D.routes[d] = D.routes[d] || []), ex = dayX(d); let k = 0;
+    want.forEach(([re, row, x, atEnd]) => { if (r.some(s => re.test(s[0]))) return; ex.forEach(e => { if (e.note && x.note && e.note === x.note) delete e.note });
+      if (atEnd) { r.push(row); ex.push(x) } else { r.splice(k, 0, row); ex.splice(k, 0, x); k++ } ch = 1 });
+    if (ch) setDayX(d, ex) };
+  const arr = typeof flightTime === 'function' ? flightTime(t.out) : null, dep = typeof flightTime === 'function' ? flightTime(t.back) : null;
+  if (ap && t.out) fix(0, [[/\(arrival\)|airport/i, [ap.name + ' (arrival)', ap.lat, ap.lon, ''], { time: arr ? hm(arr[0] + 2, arr[1] + 20) : '', note: 'Land, immigration & SIM. ' + t.out, lock: 1 }]]);
+  fix(0, [[/drop bags|check-?in/i, [t.base.name + ' (drop bags)', t.base.lat, t.base.lon, ''], { time: arr ? hm(arr[0] + 4, 0) : '', note: 'Check-in or leave luggage at your stay', lock: 1 }]]);
+  const L = DAYS.length - 1; if (ap && t.back && L > 0) fix(L, [[/\(departure\)/i, [ap.name + ' (departure)', ap.lat, ap.lon, ''], { time: dep ? hm(dep[0] - 3, dep[1]) : '', note: 'Be at the airport ~3 h before. ' + t.back, lock: 1 }, 1]]);
+  if (ch) { try { await retimeDay(0) } catch (e) { } save(); try { renderPlan() } catch (e) { } if (!quiet) toast('Arrival, stay and departure restored ✓') } }
+setTimeout(() => { if (localStorage.getItem('ak_viewonly') !== '1') ensureAnchors() }, 6000);

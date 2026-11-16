@@ -29,10 +29,9 @@
 
   /* guided tour over the real UI */
   const TOUR = [['[data-v="today"]', '🏠 Today', 'What’s next, your leave-by time, today’s spending, weather and quick trip tools.'],
-    ['[data-v="explore"]', '🔍 Explore', 'Search anything: “cafe near me”, a full address, or “where to buy 24k gold around Ximending”. Get directions, top sights, spas, restrooms and ATMs.'],
+    ['[data-v="explore"]', '🔍 Explore', 'Search anything: “cafe near me”, a full address, or “where to buy 24k gold around Ximending”. Get directions, ♡ Save places, 🎫 Book a tour, and find restrooms and ATMs.'],
     ['[data-v="plan"]', '🗺️ Plan', 'Your day-by-day schedule with real travel times and the ride home. Tap ✨ to auto-plan and 📄 for the immigration PDF.'],
-    ['[data-v="money"]', '💰 Money', 'Budget, expenses, live currency converter and who-owes-whom.'],
-    ['[data-v="docs"]', '🧳 Trip', 'What to wear, your document wallet, checklist and packing. More tools are tucked under “More”.'],
+    ['[data-v="money"]', '🎟️ Wallet', 'Tickets that open offline, ♡ saved places, free-cancellation alerts, plus budget and who-owes-whom. Docs, packing and settings are at the bottom.'],
     ['#talkFab', '🗣️ Translator', 'Tap to talk with anyone: speak, show the big translation, and hear their reply in English.'],
     ['#setBtn', '⚙️ Settings', 'Import bookings, switch trips, sync with your partner, and replay this tour any time.']];
   let t = 0;
