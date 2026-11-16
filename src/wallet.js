@@ -1,6 +1,7 @@
 /* Wallet: tickets (offline), saved places, cancel deadlines, leave-now reminder, book-a-tour links, 4-tab nav */
 const WAL = () => (D.wallet = D.wallet || { tickets: [], saved: [] });
 const wImgKey = id => 'tw_tkimg_' + id;
+function walSheet(h) { const s = $('sheet'); s.innerHTML = `<div class="sheetIn" style="max-height:94vh;overflow:auto"><div class="row sp"><span></span><button class="pill" aria-label="Close" onclick="closeSheet()">✕</button></div>${h}</div>`; s.classList.add('on') }
 function wEsc(s) { return typeof esc === 'function' ? esc(s) : String(s || '') }
 
 /* ---- nav: Today · Plan · Explore · Wallet (Docs moves to Wallet > More) ---- */
@@ -21,12 +22,12 @@ function renderWallet() { const v = $('v-money'); if (!v) return; let c = $('wal
    <h3 style="margin:6px 0">Tickets & bookings</h3>${tk || '<p class="muted">Snap or upload a ticket QR, voucher or PDF. It opens even with no signal.</p>'}
    <button class="act" style="width:100%;margin-top:8px" onclick="walAdd()">＋ Add ticket</button>
    <h3 style="margin:14px 0 6px">♡ Saved places</h3>${sv || '<p class="muted">Tap ♡ Save on any place in Explore to keep it here, then add it to a day.</p>'}
-   <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"><button class="pill" onclick="goTab('docs')">📋 Docs, packing & settings</button></div>` }
+   <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap"><button class="pill" onclick="goTab('docs')">📋 Docs, passport & settings</button></div>` }
 on('today:render', renderWallet); setTimeout(renderWallet, 300);
 
 /* ---- add / view tickets ---- */
 function walAdd(pre) { const opts = (D.routes ? Object.keys(DAYS) : []).map(i => `<option value="${i}">${DAYS[i]}</option>`).join('');
-  openSheet(`<h2>＋ Add ticket</h2><label class="muted">Name<input id="wkN" value="${wEsc(pre || '')}" placeholder="Taipei 101 observatory"></label>
+  walSheet(`<h2>＋ Add ticket</h2><label class="muted">Name<input id="wkN" value="${wEsc(pre || '')}" placeholder="Taipei 101 observatory"></label>
    <label class="muted">Day<select id="wkD"><option value="">—</option>${opts}</select></label>
    <label class="muted">Free cancellation until (optional)<input id="wkC" type="datetime-local"></label>
    <label class="muted">Booking link (optional)<input id="wkU" placeholder="https://"></label>
@@ -38,7 +39,7 @@ async function walSave() { const n = $('wkN').value.trim() || 'Ticket', f = $('w
   save(); closeSheet(); renderWallet(); walTodayCard(); toast('Ticket saved 🎟️') }
 function walShrink(f) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => { const s = Math.min(1, 1100 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', .72)) }; im.onerror = rej; im.src = URL.createObjectURL(f) }) }
 function walOpen(i) { const t = WAL().tickets[i]; if (!t) return; const img = localStorage.getItem(wImgKey(t.id));
-  openSheet(`<h2>🎟️ ${wEsc(t.name)}</h2>${img ? (img.startsWith('data:application/pdf') ? `<a class="act" href="${img}" download="${wEsc(t.name)}.pdf">Open PDF</a>` : `<img src="${img}" alt="Ticket" style="width:100%;border-radius:12px;background:#fff">`) : '<p class="muted">No file saved on this device. Tickets files stay on the phone that added them.</p>'}
+  walSheet(`<h2>🎟️ ${wEsc(t.name)}</h2>${img ? (img.startsWith('data:application/pdf') ? `<a class="act" href="${img}" download="${wEsc(t.name)}.pdf">Open PDF</a>` : `<img src="${img}" alt="Ticket" style="width:100%;border-radius:12px;background:#fff">`) : '<p class="muted">No file saved on this device. Tickets files stay on the phone that added them.</p>'}
    ${t.url ? `<a class="pill" target="_blank" rel="noopener" href="${wEsc(t.url)}" style="margin-top:8px">🔗 Booking page</a>` : ''}<p class="muted">Tip: turn screen brightness up when scanning.</p>`) }
 function walDel(i) { const t = WAL().tickets[i]; if (!t || !confirmDel(t.name)) return; localStorage.removeItem(wImgKey(t.id)); WAL().tickets.splice(i, 1); save(); renderWallet() }
 function confirmDel(n) { return window.confirm ? confirm('Delete ' + n + '?') : true }
@@ -54,7 +55,7 @@ on('place:show', p => setTimeout(() => walPlace(p), 450));
 function walPlace(p) { const a = document.querySelector('#placeHead .l2act'); if (!p || !a || a.querySelector('[data-wsave]')) return;
   const q = encodeURIComponent(p.name), n = JSON.stringify(p).replace(/"/g, '&quot;');
   a.insertAdjacentHTML('beforeend', `<button class="pill" data-wsave onclick="walSaveP(${n})"><b>♡</b>Save</button><button class="pill" onclick="walTour('${q}')"><b>🎫</b>Book a tour</button>`) }
-function walTour(q) { openSheet(`<h2>🎫 Tours & tickets</h2><p class="muted">Compare prices. Many offer free cancellation and reserve-now-pay-later.</p>
+function walTour(q) { walSheet(`<h2>🎫 Tours & tickets</h2><p class="muted">Compare prices. Many offer free cancellation and reserve-now-pay-later.</p>
   ${[['GetYourGuide', 'https://www.getyourguide.com/s/?q='], ['Klook', 'https://www.klook.com/search/result/?query='], ['KKday', 'https://www.kkday.com/en/product/productlist?keyword=']].map(([n, u]) => `<a class="act" style="display:block;margin:6px 0;text-align:center" target="_blank" rel="noopener" href="${u}${q}">${n}</a>`).join('')}
   <button class="pill" style="width:100%;margin-top:6px" onclick="walAdd(decodeURIComponent('${q}'))">Booked it? ＋ Add ticket to Wallet</button>`) }
 
