@@ -124,7 +124,7 @@ window.setPlaceTab = setTab;
 
 /* Today: Tools + Translate buttons; trip tools in a toggle */
 on('today:render', function l2today() { const w = document.querySelector('.xtraT'); if (!w || w.querySelector('.l2today')) return;
-  w.insertAdjacentHTML('afterbegin', `<div class="l2today"><button class="act" data-l2t>🧰 Tools</button><button class="pill" onclick="openTalk()">🗣️ Translate</button><button class="pill" onclick="showTripQR()">👫 Share</button></div>`);
+  w.insertAdjacentHTML('afterbegin', `<div class="l2today"><button class="act" data-l2t>🧰 Tools</button><button class="pill" onclick="openTalk()">🗣️ Translate</button><button class="pill" onclick="showTripQR()">👫 Share trip</button><button class="pill" onclick="showTripQR('app')">📲 Share app</button></div>`);
   w.querySelector('[data-l2t]').onclick = () => { document.body.classList.toggle('l2tools'); const t = $('toolsCard'); if (t && document.body.classList.contains('l2tools')) t.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } });
 
 function pane() { const v = $('v-explore'), m = $('map'), g = $('gmap'); if (!v || !m) return; let pn = $('l2pane');
