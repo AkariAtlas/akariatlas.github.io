@@ -41,8 +41,8 @@ function walShrink(f) { return new Promise((res, rej) => { const im = new Image(
 function walOpen(i) { const t = WAL().tickets[i]; if (!t) return; const img = localStorage.getItem(wImgKey(t.id));
   walSheet(`<h2>🎟️ ${wEsc(t.name)}</h2>${img ? (img.startsWith('data:application/pdf') ? `<a class="act" href="${img}" download="${wEsc(t.name)}.pdf">Open PDF</a>` : `<img src="${img}" alt="Ticket" style="width:100%;border-radius:12px;background:#fff">`) : '<p class="muted">No file saved on this device. Tickets files stay on the phone that added them.</p>'}
    ${t.url ? `<a class="pill" target="_blank" rel="noopener" href="${wEsc(t.url)}" style="margin-top:8px">🔗 Booking page</a>` : ''}<p class="muted">Tip: turn screen brightness up when scanning.</p>`) }
-function walDel(i) { const t = WAL().tickets[i]; if (!t || !confirmDel(t.name)) return; localStorage.removeItem(wImgKey(t.id)); WAL().tickets.splice(i, 1); save(); renderWallet() }
-function confirmDel(n) { return window.confirm ? confirm('Delete ' + n + '?') : true }
+function walDel(i) { const t = WAL().tickets[i]; if (!t || !walConfirm(t.name)) return; localStorage.removeItem(wImgKey(t.id)); WAL().tickets.splice(i, 1); save(); renderWallet() }
+function walConfirm(n) { return window.confirm ? confirm('Delete ' + n + '?') : true }
 
 /* ---- saved places ---- */
 function walSaveP(p) { const W = WAL(); if (W.saved.some(x => x.name === p.name)) { toast('Already saved ♡'); return }
